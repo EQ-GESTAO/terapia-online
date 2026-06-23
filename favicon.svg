@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Colo">
+  <rect width="512" height="512" rx="112" fill="#3f6b52"/>
+  <g transform="translate(96,104) scale(3.2)">
+    <path d="M22 48 Q50 80 78 48" fill="none" stroke="#f4efe6" stroke-width="11" stroke-linecap="round"/>
+    <path fill="#cf8d6c" d="M50 63 C34 50 25 42 25 33 C25 25 31 20 38 20 C44 20 48 24 50 28 C52 24 56 20 62 20 C69 20 75 25 75 33 C75 42 66 50 50 63 Z"/>
+  </g>
+</svg>

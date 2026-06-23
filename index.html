@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Colo · Terapia 24h</title>
+<meta name="theme-color" content="#3f6b52">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="manifest" href="site.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Mulish:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -299,10 +306,10 @@ function render(){
 
 /* ---------- componentes reutilizáveis ---------- */
 function logoMark(size, base, dot, ring){
-  const d=Math.round(size*0.62), o=Math.round(size*0.09), bw=Math.max(2,Math.round(size*0.09));
-  return `<div style="position:relative;width:${size}px;height:${size}px;flex:0 0 auto;">
-    <div style="position:absolute;inset:0;border-radius:50%;background:${base};"></div>
-    <div style="position:absolute;right:-${o}px;bottom:-${o}px;width:${d}px;height:${d}px;border-radius:50%;background:${dot};border:${bw}px solid ${ring};"></div></div>`;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" style="flex:0 0 auto;display:block;overflow:visible;" aria-hidden="true">
+    <path d="M22 48 Q50 80 78 48" fill="none" stroke="${base}" stroke-width="11" stroke-linecap="round"/>
+    <path fill="#cf8d6c" d="M50 63 C34 50 25 42 25 33 C25 25 31 20 38 20 C44 20 48 24 50 28 C52 24 56 20 62 20 C69 20 75 25 75 33 C75 42 66 50 50 63 Z"/>
+  </svg>`;
 }
 function avatar(user, size, ring){
   const s = size||44; const r = ring? `box-shadow:0 0 0 2.5px ${ring};` : "";
