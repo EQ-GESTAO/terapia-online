@@ -152,10 +152,35 @@ async function saveSettings(patch){
   sbErr('Salvar configurações', error);
 }
 
-/* ---------- presença (entra numa fase futura) ---------- */
-async function heartbeat(){ /* noop nesta fase */ }
-async function onlineEmails(){ return {}; }
-function emailOf(){ return ""; }
+/* ---------- presença (online em tempo real) ---------- */
+const PRESENCE = { channel:null, online:{}, roles:{} };
+function presenceRebuild(){
+  const st = PRESENCE.channel ? PRESENCE.channel.presenceState() : {};
+  const online={}, roles={};
+  Object.values(st).forEach(arr=>(arr||[]).forEach(p=>{ if(p && p.id){ online[p.id]=true; roles[p.id]=p.role; } }));
+  PRESENCE.online=online; PRESENCE.roles=roles;
+}
+function presenceRerender(){
+  if(S.screen==="therapist") refreshTherapist(false);
+  else if(S.screen==="gestao") refreshGestao(false);
+  else if(S.screen==="patient") refreshPatient(false);
+  else if(S.screen==="login") refreshLoginPresence();
+}
+function startPresence(){
+  if(!sb) return;
+  stopPresence();
+  const key = PROFILE ? PROFILE.id : ("anon-"+Math.random().toString(36).slice(2));
+  const ch = sb.channel("presence-colo", { config:{ presence:{ key } } });
+  ch.on("presence", { event:"sync" }, ()=>{ presenceRebuild(); presenceRerender(); });
+  ch.subscribe(async (status)=>{
+    if(status==="SUBSCRIBED" && PROFILE){ try{ await ch.track({ id:PROFILE.id, role:PROFILE.role, name:PROFILE.name }); }catch(e){} }
+  });
+  PRESENCE.channel = ch;
+}
+function stopPresence(){ if(PRESENCE.channel){ try{ sb.removeChannel(PRESENCE.channel); }catch(e){} PRESENCE.channel=null; PRESENCE.online={}; PRESENCE.roles={}; } }
+async function heartbeat(){ /* substituído por Realtime Presence */ }
+async function onlineEmails(){ return PRESENCE.online; }
+function emailOf(id){ return id; }
 
 /* ---------- conversas (atendimentos) ---------- */
 function mapConv(c){
@@ -376,14 +401,14 @@ function renderLogin(){
   app().querySelector("#goSignup").onclick=()=>{S.screen="signup";S.su={step:1,nome:"",email:"",senha:"",motivos:[]};render();};
   app().querySelector("#liGo").onclick=doLogin;
   app().querySelector("#liPass").onkeydown=e=>{if(e.key==="Enter")doLogin();};
+  refreshLoginPresence();
 }
 function segStyle(a){ return `background:${a?'#fff':'transparent'};color:${a?'#2d6a4f':'#8a847a'};box-shadow:${a?'0 1px 4px rgba(45,42,38,.08)':'none'};`; }
 function demoBtn(){ return "flex:1;padding:10px;border:1.5px solid #d8e6dd;border-radius:11px;background:#fff;color:#2d6a4f;font-size:13px;font-weight:700;"; }
 async function refreshLoginPresence(){
   const el=document.getElementById("loginPresence"); if(!el) return;
-  await loadUsers(); const on=await onlineEmails();
-  const n=Object.keys(on).filter(e=>USERS[e]&&USERS[e].role==="terapeuta").length;
-  el.innerHTML=`<span style="width:8px;height:8px;border-radius:50%;background:#9fe3b4;animation:blink 1.8s ease-in-out infinite;"></span> Plantão 24h · ${n} terapeuta${n===1?"":"s"} online agora`;
+  const n=Object.values(PRESENCE.roles).filter(r=>r==="terapeuta").length;
+  el.innerHTML=`<span style="width:8px;height:8px;border-radius:50%;background:#9fe3b4;animation:blink 1.8s ease-in-out infinite;"></span> Plantão 24h${n?` · ${n} terapeuta${n===1?"":"s"} online agora`:""}`;
 }
 async function doLogin(){
   const email=(document.getElementById("liEmail").value||"").trim().toLowerCase();
@@ -409,9 +434,10 @@ async function afterAuth(){
   else if(PROFILE.role==="gestao"){ S.screen="gestao"; S.gView="relatorios"; S.gActive=null; }
   else { S.screen="patient"; const mine=(await listConvs()).filter(c=>c.patientId===PROFILE.id); S.pActive = mine[0]?mine[0].id:null; }
   startRealtime();
+  startPresence();
   render();
 }
-async function logout(){ try{ await sb.auth.signOut(); }catch(e){} stopRealtime(); PROFILE=null; USERS={}; S.session=null; S.screen="login"; S.pActive=S.tActive=S.gActive=null; closeModal(); render(); }
+async function logout(){ try{ await sb.auth.signOut(); }catch(e){} stopRealtime(); stopPresence(); PROFILE=null; USERS={}; S.session=null; S.screen="login"; S.pActive=S.tActive=S.gActive=null; closeModal(); startPresence(); render(); }
 
 /* ============================================================
    SIGNUP (paciente) — sem seletor de cor/tema
@@ -785,7 +811,7 @@ function therapistConvRow(c,on){
       ${waiting?'<span style="display:inline-block;margin-top:6px;font-size:11px;font-weight:700;color:#b5763f;background:#fbf0e2;padding:2px 8px;border-radius:8px;">aguardando · '+relTime(c.createdAt)+'</span>':(c.status==='encerrado'?'<span style="display:inline-block;margin-top:6px;font-size:11px;font-weight:700;color:#8a847a;background:#f3efe8;padding:2px 8px;border-radius:8px;">encerrado</span>':'')}
     </div></div>`;
 }
-function emailOf(id){ for(const e in USERS){ if(USERS[e].id===id) return e; } return ""; }
+function _emailOfLegacy(id){ return id; }
 async function renderTherapistMain(force,on){
   const main=document.getElementById("tMain"), info=document.getElementById("tInfo");
   if(!main) return;
@@ -1196,7 +1222,7 @@ setInterval(async()=>{
   });
   const { data } = await sb.auth.getSession();
   if(data && data.session){ await afterAuth(); }
-  else { S.screen="login"; render(); }
+  else { S.screen="login"; render(); startPresence(); }
 })();
 </script>
 </body>
