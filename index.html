@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Colo · Terapia 24h</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Mulish:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{background:#f3efe8;font-family:'Mulish',-apple-system,sans-serif;color:#2d2a26;}
+  #app{min-height:100vh;}
+  ::-webkit-scrollbar{width:9px;height:9px;}
+  ::-webkit-scrollbar-thumb{background:rgba(45,42,38,.16);border-radius:8px;border:2px solid transparent;background-clip:padding-box;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  input,textarea,button,select{font-family:inherit;outline:none;}
+  input::placeholder,textarea::placeholder{color:#b3ada1;}
+  button{cursor:pointer;}
+  a{cursor:pointer;}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+  @keyframes blink{0%,100%{opacity:1;}50%{opacity:.35;}}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(207,79,61,.45);}70%{box-shadow:0 0 0 12px rgba(207,79,61,0);}100%{box-shadow:0 0 0 0 rgba(207,79,61,0);}}
+  .field{width:100%;padding:12px 15px;border:1.5px solid #e2dccf;border-radius:11px;background:#fff;font-size:15px;color:#2d2a26;}
+  .primary{width:100%;padding:14px;border:none;border-radius:11px;background:#3f6b52;color:#f4efe6;font-size:15.5px;font-weight:700;box-shadow:0 6px 16px rgba(63,107,82,.22);transition:.15s;}
+  .primary:hover{background:#34593f;}
+  .ghost{padding:12px;border:1.5px solid #e2dccf;border-radius:11px;background:#fff;color:#6b655b;font-size:14px;font-weight:700;}
+  .toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#2d2a26;color:#f4efe6;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,.25);animation:fadeUp .3s ease;}
+  .seg{flex:1;padding:10px;border:none;border-radius:10px;font-size:14px;font-weight:700;transition:.15s;}
+  .convrow:hover{background:#f3efe8 !important;}
+  @media(max-width:820px){
+    .login-aside{display:none !important;}
+    .login-panel{width:100% !important;flex:1 !important;padding:32px 22px !important;}
+    .col-list{width:100% !important;flex:1 0 100% !important;}
+    .col-main,.col-info{display:none !important;}
+    .col-list.hide{display:none !important;}
+    .col-main.show{display:flex !important;flex:1 0 100% !important;}
+    .col-info.show{display:block !important;width:100% !important;flex:1 0 100% !important;}
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="modalRoot"></div>
+
+<script>
+/* ============================================================
+   Colo · Terapia 24h — protótipo funcional v2
+   Papéis: paciente · terapeuta · gestão
+   Conversas por atendimento (fila → puxar → exclusivo)
+   Perfis editáveis com foto · fundo verde com pattern
+   Conectado ao Supabase (Auth + Postgres/RLS + Realtime)
+   ============================================================ */
+
+/* ============================================================
+   CONFIGURAÇÃO DO SUPABASE
+   Troque pelos dados do SEU projeto se mudar de ambiente.
+   Estas chaves são públicas (o que protege os dados é o RLS).
+   ============================================================ */
+const SUPA_URL  = "https://jyuidyfkqayjoxignoez.supabase.co";
+const SUPA_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp5dWlkeWZrcWF5am94aWdub2V6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDk5MTEsImV4cCI6MjA5Nzc4NTkxMX0.Da5DPM3na2R4WlIB0sp58rQddcqIB23SP8zfyx8J8jQ";
+
+let sb = null;
+function initSupabase(){
+  if(!window.supabase || !window.supabase.createClient){ showFatal("Não consegui carregar a biblioteca do Supabase (verifique sua conexão)."); return false; }
+  sb = window.supabase.createClient(SUPA_URL, SUPA_ANON, { auth:{ persistSession:true, autoRefreshToken:true } });
+  return true;
+}
+
+/* mostra erros do backend de forma visível (pra iterarmos rápido) */
+function showFatal(msg){
+  let b=document.getElementById("errbar");
+  if(!b){ b=document.createElement("div"); b.id="errbar";
+    b.style.cssText="position:fixed;top:0;left:0;right:0;z-index:99999;background:#b5483a;color:#fff;font:600 13px/1.4 'Mulish',sans-serif;padding:10px 16px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.2);";
+    document.body.appendChild(b); }
+  b.textContent = "⚠ " + msg + "  (toque para ocultar)";
+  b.onclick=()=>b.remove();
+}
+function sbErr(context, error){ if(error){ console.error(context, error); toast(context+": "+(error.message||error)); } return error; }
+
+/* ---------- utilidades ---------- */
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const nowHM = (ts) => { const d = ts ? new Date(ts) : new Date(); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); };
+const initials = (n) => (n||"?").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
+const esc = (s) => (s==null?"":String(s)).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const COLORS = ["#cf8d6c","#6c8fcf","#7fa06b","#b07fc0","#c79a6a","#5c8a8a","#c08a8a","#3f6b52"];
+function colorFor(name){ let h=0; for(let i=0;i<(name||"").length;i++) h=(h*31+name.charCodeAt(i))>>>0; return COLORS[h % COLORS.length]; }
+function relTime(ts){ if(!ts) return ""; const m=Math.floor(Math.max(0,Date.now()-ts)/60000); if(m<1) return "agora"; if(m<60) return m+" min"; const h=Math.floor(m/60); if(h<24) return h+"h"; return Math.floor(h/24)+"d"; }
+function weakHash(str){ let h=5381; for(let i=0;i<str.length;i++){ h=((h<<5)+h)+str.charCodeAt(i); } return (h>>>0).toString(36); }
+const roleLabel = r => r==="gestao"?"Gestão":r==="terapeuta"?"Terapeuta":"Paciente";
+
+/* ---------- estado de sessão (por aba) ---------- */
+const S = {
+  session: null,
+  screen: "login",
+  loginRole: "paciente",
+  su: { step:1, nome:"", email:"", senha:"", motivos:[] },
+  pActive: null,          // conversa ativa do paciente
+  tTab: "aguardando",     // aba do terapeuta
+  tActive: null,
+  gView: "relatorios",    // aba da gestão
+  gActive: null,
+  gFilter: "todas",
+  recording: null,
+  toastTimer: null,
+  photoPending: undefined // foto carregada no modal (data url) ainda não salva
+};
+
+/* ---------- perfis / usuários ---------- */
+let PROFILE = null;     // perfil do usuário logado
+let USERS = {};         // id -> perfil (apenas os visíveis via RLS)
+function me(){ return PROFILE; }
+function normProfile(p){ if(p){ p.photo = p.photo_url || null; } return p; }
+async function loadUsers(){
+  const { data, error } = await sb.from('profiles').select('*');
+  if(error){ sbErr('Carregar perfis', error); return USERS; }
+  USERS = {}; (data||[]).forEach(p=>{ USERS[p.id]=normProfile(p); });
+  return USERS;
+}
+function userById(id){ return id ? (USERS[id]||null) : null; }
+async function refreshProfile(){
+  const { data: s } = await sb.auth.getSession();
+  if(!s || !s.session){ PROFILE=null; return null; }
+  const { data, error } = await sb.from('profiles').select('*').eq('id', s.session.user.id).maybeSingle();
+  if(error){ sbErr('Carregar seu perfil', error); }
+  PROFILE = data ? normProfile(data) : null;
+  if(PROFILE){ PROFILE.email = s.session.user.email; USERS[PROFILE.id]=PROFILE; }
+  return PROFILE;
+}
+
+/* ---------- configurações ---------- */
+const DEFAULT_SET = {
+  plataforma:"Colo", welcomeOn:true,
+  welcomeMsg:"Você está na fila de espera 🌿 Um terapeuta de plantão vai te acolher em instantes. Pode já ir escrevendo como está se sentindo.",
+  quickReplies:["Tô aqui com você 🌿","Vamos respirar juntos?","Me conta mais sobre isso","Você fez bem em escrever"],
+  temas:["Ansiedade","Insônia","Tristeza","Luto","Relacionamento","Trabalho","Pânico","Outro"]
+};
+let SET = Object.assign({}, DEFAULT_SET);
+async function loadSettings(){
+  const { data } = await sb.from('settings').select('*').eq('id',1).maybeSingle();
+  if(data){ SET = { plataforma:data.plataforma, welcomeOn:data.welcome_on, welcomeMsg:data.welcome_msg,
+                    quickReplies:data.quick_replies||[], temas:data.temas||[] }; }
+  return SET;
+}
+async function saveSettings(patch){
+  SET = Object.assign({}, SET, patch);
+  const row = { plataforma:SET.plataforma, welcome_on:SET.welcomeOn, welcome_msg:SET.welcomeMsg,
+                quick_replies:SET.quickReplies, temas:SET.temas };
+  const { error } = await sb.from('settings').update(row).eq('id',1);
+  sbErr('Salvar configurações', error);
+}
+
+/* ---------- presença (entra numa fase futura) ---------- */
+async function heartbeat(){ /* noop nesta fase */ }
+async function onlineEmails(){ return {}; }
+function emailOf(){ return ""; }
+
+/* ---------- conversas (atendimentos) ---------- */
+function mapConv(c){
+  const lastFrom = c.last_from;
+  return {
+    id:c.id, patientId:c.patient_id, therapistId:c.therapist_id, status:c.status,
+    createdAt: c.created_at ? new Date(c.created_at).getTime() : Date.now(),
+    claimedAt: c.claimed_at ? new Date(c.claimed_at).getTime() : null,
+    closedAt:  c.closed_at  ? new Date(c.closed_at).getTime()  : null,
+    lastTs: c.last_ts ? new Date(c.last_ts).getTime() : 0,
+    lastText: c.last_text||"", lastFrom,
+    pcount: lastFrom==='paciente' ? 1 : 0,
+    count:  lastFrom ? 1 : 0,
+    unreadP: c._unread?1:0, unreadT: c._unread?1:0
+  };
+}
+async function listConvs(){
+  const { data, error } = await sb.from('conversations').select('*').order('last_ts',{ascending:false});
+  if(error){ sbErr('Carregar conversas', error); return []; }
+  let rr = {};
+  if(PROFILE){
+    const { data: rrs } = await sb.from('read_receipts').select('conversation_id,last_read_at').eq('user_id', PROFILE.id);
+    (rrs||[]).forEach(r=> rr[r.conversation_id]= new Date(r.last_read_at).getTime());
+  }
+  const myRole = PROFILE ? PROFILE.role : null;
+  return (data||[]).map(c=>{
+    const lastTs = c.last_ts ? new Date(c.last_ts).getTime() : 0;
+    c._unread = !!(c.last_from && c.last_from !== myRole && (!rr[c.id] || lastTs > rr[c.id]));
+    return mapConv(c);
+  });
+}
+async function loadMsgs(convId){
+  const { data, error } = await sb.from('messages').select('*').eq('conversation_id',convId).order('created_at',{ascending:true});
+  if(error){ sbErr('Carregar mensagens', error); return []; }
+  return (data||[]).map(m=>({
+    id:m.id, from:m.sender_role, kind: m.kind==='audio'?'audio':'text',
+    text:m.body||"", ts: m.created_at ? new Date(m.created_at).getTime() : Date.now()
+  }));
+}
+async function createConv(patientId){
+  const pid = patientId || (PROFILE && PROFILE.id);
+  const { data: ex } = await sb.from('conversations').select('id,last_from,status').eq('patient_id',pid).eq('status','aguardando');
+  const empty=(ex||[]).find(c=> c.last_from===null || c.last_from==='sistema');
+  if(empty) return empty.id;
+  const { data, error } = await sb.from('conversations').insert({ patient_id: pid }).select().single();
+  if(error){ sbErr('Iniciar conversa', error); return null; }
+  return data.id;
+}
+async function pushMsg(convId, msg){
+  const { error } = await sb.from('messages').insert({
+    conversation_id: convId, sender_id: PROFILE.id, sender_role: msg.from,
+    kind: msg.kind==='audio'?'audio':'texto', body: msg.text||""
+  });
+  sbErr('Enviar mensagem', error);
+}
+async function markRead(convId){
+  if(!convId) return;
+  await sb.rpc('mark_read', { cid: convId });
+}
+async function claimConv(convId){
+  const { error } = await sb.rpc('claim_conversation', { cid: convId });
+  if(error){ toast(error.message||"Não foi possível atender."); return false; }
+  return true;
+}
+async function closeConv(convId){
+  const { error } = await sb.from('conversations').update({ status:'encerrado', closed_at:new Date().toISOString() }).eq('id',convId);
+  sbErr('Encerrar atendimento', error);
+}
+async function reopenConv(convId){
+  const { error } = await sb.from('conversations').update({ status:'ativo' }).eq('id',convId);
+  sbErr('Reabrir atendimento', error);
+}
+async function getNotes(convId){
+  const { data } = await sb.from('notes').select('body').eq('conversation_id',convId).maybeSingle();
+  return data ? (data.body||"") : "";
+}
+async function setNotes(convId, body){
+  const { error } = await sb.from('notes').upsert({ conversation_id:convId, therapist_id:PROFILE.id, body, updated_at:new Date().toISOString() });
+  sbErr('Salvar anotação', error);
+}
+async function getConv(id){
+  const { data } = await sb.from('conversations').select('*').eq('id',id).maybeSingle();
+  return data ? mapConv(data) : null;
+}
+
+/* ---------- tempo real (push) ---------- */
+let RT = null, rtTimer = null;
+function scheduleRefresh(){
+  clearTimeout(rtTimer);
+  rtTimer = setTimeout(()=>{
+    if(S.screen==="patient") refreshPatient(false);
+    else if(S.screen==="therapist") refreshTherapist(false);
+    else if(S.screen==="gestao") refreshGestao(false);
+  }, 250);
+}
+function startRealtime(){
+  if(RT || !sb) return;
+  RT = sb.channel('colo-rt')
+    .on('postgres_changes', { event:'*', schema:'public', table:'messages' }, scheduleRefresh)
+    .on('postgres_changes', { event:'*', schema:'public', table:'conversations' }, scheduleRefresh)
+    .subscribe();
+}
+function stopRealtime(){ if(RT){ try{ sb.removeChannel(RT); }catch(e){} RT=null; } }
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+const app = () => document.getElementById("app");
+function render(){
+  if(S.screen==="login") renderLogin();
+  else if(S.screen==="signup") renderSignup();
+  else if(S.screen==="patient") renderPatient();
+  else if(S.screen==="therapist") renderTherapist();
+  else if(S.screen==="gestao") renderGestao();
+}
+
+/* ---------- componentes reutilizáveis ---------- */
+function logoMark(size, base, dot, ring){
+  const d=Math.round(size*0.62), o=Math.round(size*0.09), bw=Math.max(2,Math.round(size*0.09));
+  return `<div style="position:relative;width:${size}px;height:${size}px;flex:0 0 auto;">
+    <div style="position:absolute;inset:0;border-radius:50%;background:${base};"></div>
+    <div style="position:absolute;right:-${o}px;bottom:-${o}px;width:${d}px;height:${d}px;border-radius:50%;background:${dot};border:${bw}px solid ${ring};"></div></div>`;
+}
+function avatar(user, size, ring){
+  const s = size||44; const r = ring? `box-shadow:0 0 0 2.5px ${ring};` : "";
+  if(user && user.photo){
+    return `<img src="${user.photo}" style="width:${s}px;height:${s}px;border-radius:50%;object-fit:cover;flex:0 0 auto;${r}" alt="">`;
+  }
+  const name = user? user.name : "?";
+  return `<div style="width:${s}px;height:${s}px;border-radius:50%;background:${colorFor(name)};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(s*0.36)}px;font-family:'Newsreader',serif;flex:0 0 auto;${r}">${initials(name)}</div>`;
+}
+function greenPattern(idSuffix){
+  const id = "leaf-"+idSuffix;
+  return `<svg width="100%" height="100%" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;" xmlns="http://www.w3.org/2000/svg">
+    <defs><pattern id="${id}" width="56" height="56" patternUnits="userSpaceOnUse" patternTransform="rotate(9)">
+      <g fill="none" stroke="#34593f" stroke-width="1.3" opacity="0.09">
+        <path d="M12 32 C12 21 22 17 30 14 C27 25 21 32 12 32 Z"/>
+        <path d="M30 14 C30 14 28 22 18 28"/>
+        <path d="M44 6 C44 1 49 -1 53 -2 C51 4 48 6 44 6 Z"/>
+      </g>
+      <circle cx="6" cy="48" r="1.5" fill="#34593f" opacity="0.10"/>
+      <circle cx="46" cy="42" r="1.3" fill="#34593f" opacity="0.08"/>
+    </pattern></defs>
+    <rect width="100%" height="100%" fill="url(#${id})"/></svg>`;
+}
+function bubble(m, mine, cozy){
+  if(m.from==="sistema"){
+    return `<div style="display:flex;justify-content:center;position:relative;z-index:1;margin:2px 0;">
+      <div style="max-width:80%;text-align:center;font-size:13px;line-height:1.5;color:#3f6b52;background:rgba(255,255,255,.78);border:1px solid #d4e4d9;border-radius:14px;padding:9px 16px;">${esc(m.text)}</div></div>`;
+  }
+  let maxW,padd,fs,lh,radius,bg,color,border,shadow;
+  if(cozy){
+    maxW="min(620px, 82%)"; padd="12px 16px"; fs="15px"; lh=1.55;
+    radius = mine?"20px 20px 6px 20px":"20px 20px 20px 6px";
+    bg = mine?"#d9ece1":"#ffffff"; color="#2d2a26";
+    border = mine?"1px solid #cbe1d3":"1px solid #ece7de"; shadow="0 1px 3px rgba(45,42,38,.06)";
+  } else {
+    maxW="min(560px, 74%)"; padd="8px 12px 7px"; fs="14px"; lh=1.45; radius="11px";
+    bg = mine?"#dcf2e4":"#ffffff"; color="#2d2a26"; border="1px solid "+(mine?"#cbe7d3":"#ece7de"); shadow="0 1px 2px rgba(45,42,38,.05)";
+  }
+  const row = `display:flex;justify-content:${mine?"flex-end":"flex-start"};position:relative;z-index:1;`;
+  const bub = `max-width:${maxW};word-break:break-word;padding:${padd};font-size:${fs};line-height:${lh};border-radius:${radius};background:${bg};color:${color};border:${border};box-shadow:${shadow};`;
+  const tstyle = `font-size:10.5px;color:${mine?"rgba(45,42,38,.42)":"#b3ada1"};margin-top:5px;text-align:${mine?"right":"left"};`;
+  let inner;
+  if(m.kind==="audio"){
+    const barColor = mine?"#79a78c":"#c5beb2"; const playBg = mine?"#3f6b52":"#7fa890";
+    const bars = AUDIOBARS.map((h,i)=>`<div data-i="${i}" style="width:3px;height:${Math.max(4,h)}px;border-radius:2px;background:${barColor};opacity:${i<9?1:.55};transition:opacity .1s;"></div>`).join("");
+    inner = `<div class="audio-msg" data-aid="${esc(m.audioId||"")}" style="display:flex;align-items:center;gap:11px;min-width:210px;">
+      <div class="audio-play" style="width:30px;height:30px;border-radius:50%;background:${playBg};color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;padding-left:2px;flex:0 0 auto;cursor:pointer;">▶</div>
+      <div class="audio-bars" style="display:flex;align-items:flex-end;gap:2px;height:26px;flex:1;">${bars}</div>
+      <span style="font-size:11.5px;opacity:.6;flex:0 0 auto;">${esc(m.dur||"0:00")}</span></div>`;
+  } else inner = `<div>${esc(m.text)}</div>`;
+  return `<div style="${row}"><div style="${bub}">${inner}<div style="${tstyle}">${nowHM(m.ts)}</div></div></div>`;
+}
+const AUDIOBARS = [7,12,18,9,22,14,25,17,10,21,13,8,19,24,11,16,9,20,13,23,15,8,18,11,21,14,10,17];
+
+/* ============================================================
+   LOGIN
+   ============================================================ */
+function renderLogin(){
+  const segP = S.loginRole==="paciente";
+  app().innerHTML = `
+  <div style="min-height:100vh;display:flex;">
+    <div class="login-aside" style="flex:1.1;background:linear-gradient(155deg,#3f6b52 0%,#34593f 100%);color:#f4efe6;padding:60px 64px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden;min-width:0;">
+      <div style="position:absolute;width:440px;height:440px;border-radius:50%;background:rgba(255,255,255,.05);right:-160px;top:-140px;"></div>
+      <div style="position:absolute;width:300px;height:300px;border-radius:50%;background:rgba(255,255,255,.04);left:-120px;bottom:-110px;"></div>
+      <div style="display:flex;align-items:center;gap:12px;position:relative;">${logoMark(34,"#f4efe6","#7fae90","#34593f")}<span style="font-family:'Newsreader',serif;font-size:23px;font-weight:600;">${esc(SET.plataforma||"Colo")}</span></div>
+      <div style="position:relative;max-width:460px;">
+        <h1 style="font-family:'Newsreader',serif;font-weight:500;font-size:46px;line-height:1.12;margin:0 0 20px;letter-spacing:-.5px;">Cuidado a qualquer hora do dia.</h1>
+        <p style="font-size:17px;line-height:1.65;color:rgba(244,239,230,.82);margin:0;max-width:400px;">Terapia online quando e como você precisar. Uma conversa de distância — por texto ou áudio, com um terapeuta de plantão.</p>
+      </div>
+      <div style="position:relative;display:flex;align-items:center;gap:10px;font-size:14px;color:rgba(244,239,230,.85);" id="loginPresence">
+        <span style="width:8px;height:8px;border-radius:50%;background:#9fe3b4;animation:blink 1.8s ease-in-out infinite;"></span> Plantão 24h
+      </div>
+    </div>
+    <div class="login-panel" style="width:560px;flex:0 0 560px;display:flex;align-items:center;justify-content:center;padding:48px;background:#faf7f1;">
+      <div style="width:100%;max-width:380px;animation:fadeUp .5s ease;">
+        <p style="font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:#5c8a6f;font-weight:700;margin:0 0 8px;">Bem-vindo de volta</p>
+        <h2 style="font-family:'Newsreader',serif;font-weight:500;font-size:30px;margin:0 0 28px;letter-spacing:-.3px;">Entrar na plataforma</h2>
+        <div style="display:flex;gap:6px;background:#efe9df;padding:5px;border-radius:14px;margin-bottom:24px;">
+          <button class="seg" data-role="paciente" style="${segStyle(segP)}">Sou paciente</button>
+          <button class="seg" data-role="profissional" style="${segStyle(!segP)}">Sou profissional</button>
+        </div>
+        <label style="display:block;font-size:13px;font-weight:600;color:#6b655b;margin-bottom:7px;">E-mail</label>
+        <input id="liEmail" class="field" type="email" placeholder="voce@email.com" style="margin-bottom:18px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px;">
+          <label style="font-size:13px;font-weight:600;color:#6b655b;">Senha</label>
+          <a style="font-size:12.5px;color:#5c8a6f;font-weight:600;">Esqueci minha senha</a>
+        </div>
+        <input id="liPass" class="field" type="password" placeholder="••••••••" style="margin-bottom:8px;">
+        <div id="liErr" style="color:#b5483a;font-size:13px;font-weight:600;min-height:18px;margin-bottom:10px;"></div>
+        <button id="liGo" class="primary">${segP?"Entrar e conversar":"Entrar no painel"}</button>
+        <p style="text-align:center;font-size:14px;color:#8a847a;margin:26px 0 0;">Primeira vez aqui? <a id="goSignup" style="color:#3f6b52;font-weight:700;">Criar conta</a></p>
+      </div>
+    </div>
+  </div>`;
+  app().querySelectorAll(".seg").forEach(b=>b.onclick=()=>{S.loginRole=b.dataset.role==="paciente"?"paciente":"profissional";render();});
+  app().querySelector("#goSignup").onclick=()=>{S.screen="signup";S.su={step:1,nome:"",email:"",senha:"",motivos:[]};render();};
+  app().querySelector("#liGo").onclick=doLogin;
+  app().querySelector("#liPass").onkeydown=e=>{if(e.key==="Enter")doLogin();};
+}
+function segStyle(a){ return `background:${a?'#fff':'transparent'};color:${a?'#2d6a4f':'#8a847a'};box-shadow:${a?'0 1px 4px rgba(45,42,38,.08)':'none'};`; }
+function demoBtn(){ return "flex:1;padding:10px;border:1.5px solid #d8e6dd;border-radius:11px;background:#fff;color:#2d6a4f;font-size:13px;font-weight:700;"; }
+async function refreshLoginPresence(){
+  const el=document.getElementById("loginPresence"); if(!el) return;
+  await loadUsers(); const on=await onlineEmails();
+  const n=Object.keys(on).filter(e=>USERS[e]&&USERS[e].role==="terapeuta").length;
+  el.innerHTML=`<span style="width:8px;height:8px;border-radius:50%;background:#9fe3b4;animation:blink 1.8s ease-in-out infinite;"></span> Plantão 24h · ${n} terapeuta${n===1?"":"s"} online agora`;
+}
+async function doLogin(){
+  const email=(document.getElementById("liEmail").value||"").trim().toLowerCase();
+  const pass=document.getElementById("liPass").value||""; const err=document.getElementById("liErr");
+  if(!email||!pass){err.textContent="Preencha e-mail e senha.";return;}
+  err.textContent="Entrando…";
+  const { error } = await sb.auth.signInWithPassword({ email, password:pass });
+  if(error){ err.textContent = /invalid/i.test(error.message)?"E-mail ou senha incorretos.":error.message; return; }
+  await afterAuth();
+}
+async function loginWith(){ toast("No app conectado, entre com seu e-mail e senha."); }
+async function afterAuth(){
+  await refreshProfile();
+  if(!PROFILE){
+    // perfil pode levar um instante para ser criado pelo gatilho; tenta de novo
+    await new Promise(r=>setTimeout(r,600)); await refreshProfile();
+  }
+  if(!PROFILE){ showFatal("Conta sem perfil. Avise a gestão para configurar seu acesso."); return; }
+  S.session={ email:PROFILE.email, role:PROFILE.role, id:PROFILE.id, name:PROFILE.name, photo:PROFILE.photo||null, crp:PROFILE.crp, cargo:PROFILE.cargo };
+  await loadUsers();
+  await loadSettings();
+  if(PROFILE.role==="terapeuta"){ S.screen="therapist"; S.tTab="aguardando"; S.tActive=null; }
+  else if(PROFILE.role==="gestao"){ S.screen="gestao"; S.gView="relatorios"; S.gActive=null; }
+  else { S.screen="patient"; const mine=(await listConvs()).filter(c=>c.patientId===PROFILE.id); S.pActive = mine[0]?mine[0].id:null; }
+  startRealtime();
+  render();
+}
+async function logout(){ try{ await sb.auth.signOut(); }catch(e){} stopRealtime(); PROFILE=null; USERS={}; S.session=null; S.screen="login"; S.pActive=S.tActive=S.gActive=null; closeModal(); render(); }
+
+/* ============================================================
+   SIGNUP (paciente) — sem seletor de cor/tema
+   ============================================================ */
+function renderSignup(){
+  const st=S.su.step;
+  app().innerHTML = `
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:48px 24px 60px;background:radial-gradient(120% 100% at 50% 0%,#f4efe6 0%,#ece5d8 100%);">
+    <div style="width:100%;max-width:480px;animation:fadeUp .45s ease;">
+      <div style="display:flex;align-items:center;gap:11px;margin-bottom:30px;justify-content:center;">${logoMark(30,"#3f6b52","#7fae90","#ece5d8")}<span style="font-family:'Newsreader',serif;font-size:21px;font-weight:600;color:#34593f;">${esc(SET.plataforma||"Colo")}</span></div>
+      <div style="display:flex;gap:8px;margin-bottom:30px;">${[1,2].map(n=>`<div style="flex:1;height:5px;border-radius:3px;background:${st>=n?'#3f6b52':'#ddd5c7'};"></div>`).join("")}</div>
+      <div style="background:#fff;border:1px solid #ece5d8;border-radius:20px;padding:34px 32px;box-shadow:0 12px 40px rgba(45,42,38,.07);">
+        ${st===1?suStep1():suStep2()}
+      </div>
+      <p style="text-align:center;font-size:13.5px;color:#8a847a;margin:22px 0 0;">Já tem conta? <a id="goLogin" style="color:#3f6b52;font-weight:700;">Entrar</a></p>
+    </div>
+  </div>`;
+  const q=id=>document.getElementById(id);
+  if(q("goLogin")) q("goLogin").onclick=()=>{S.screen="login";render();};
+  if(q("suNome")) q("suNome").oninput=e=>S.su.nome=e.target.value;
+  if(q("suEmail")) q("suEmail").oninput=e=>S.su.email=e.target.value;
+  if(q("suSenha")) q("suSenha").oninput=e=>S.su.senha=e.target.value;
+  if(q("suNext")) q("suNext").onclick=suNext;
+  if(q("suPrev")) q("suPrev").onclick=()=>{S.su.step=1;render();};
+  if(q("suFinish")) q("suFinish").onclick=finishSignup;
+  app().querySelectorAll(".su-chip").forEach(b=>b.onclick=()=>{const c=b.dataset.c,i=S.su.motivos.indexOf(c);if(i>=0)S.su.motivos.splice(i,1);else S.su.motivos.push(c);render();});
+}
+function suStep1(){ return `
+  <p style="font-size:12.5px;letter-spacing:1.4px;text-transform:uppercase;color:#5c8a6f;font-weight:700;margin:0 0 6px;">Passo 1 de 2</p>
+  <h2 style="font-family:'Newsreader',serif;font-weight:500;font-size:27px;margin:0 0 6px;">Vamos criar sua conta</h2>
+  <p style="font-size:14.5px;color:#8a847a;margin:0 0 24px;line-height:1.5;">Leva menos de um minuto. Seu espaço seguro começa aqui.</p>
+  <label style="display:block;font-size:13px;font-weight:600;color:#6b655b;margin-bottom:7px;">Como podemos te chamar?</label>
+  <input id="suNome" class="field" placeholder="Seu nome" value="${esc(S.su.nome)}" style="margin-bottom:16px;">
+  <label style="display:block;font-size:13px;font-weight:600;color:#6b655b;margin-bottom:7px;">E-mail</label>
+  <input id="suEmail" class="field" type="email" placeholder="voce@email.com" value="${esc(S.su.email)}" style="margin-bottom:16px;">
+  <label style="display:block;font-size:13px;font-weight:600;color:#6b655b;margin-bottom:7px;">Crie uma senha</label>
+  <input id="suSenha" class="field" type="password" placeholder="••••••••" value="${esc(S.su.senha)}" style="margin-bottom:8px;">
+  <div id="suErr" style="color:#b5483a;font-size:13px;font-weight:600;min-height:18px;margin-bottom:10px;"></div>
+  <button id="suNext" class="primary">Continuar</button>`; }
+function suStep2(){
+  const chips=(SET.temas&&SET.temas.length)?SET.temas:DEFAULT_SET.temas;
+  return `
+  <p style="font-size:12.5px;letter-spacing:1.4px;text-transform:uppercase;color:#5c8a6f;font-weight:700;margin:0 0 6px;">Passo 2 de 2</p>
+  <h2 style="font-family:'Newsreader',serif;font-weight:500;font-size:27px;margin:0 0 6px;">O que te traz aqui hoje?</h2>
+  <p style="font-size:14.5px;color:#8a847a;margin:0 0 22px;line-height:1.5;">Escolha o que faz sentido. Você pode mudar depois no seu perfil.</p>
+  <div style="display:flex;flex-wrap:wrap;gap:9px;margin-bottom:28px;">
+    ${chips.map(c=>{const on=S.su.motivos.includes(c);return `<button class="su-chip" data-c="${esc(c)}" style="padding:9px 15px;border-radius:20px;font-size:14px;font-weight:600;border:1.5px solid ${on?'#3f6b52':'#e2dccf'};background:${on?'#eaf3ee':'#fff'};color:${on?'#2d6a4f':'#6b655b'};">${esc(c)}</button>`;}).join("")}
+  </div>
+  <div style="display:flex;gap:10px;">
+    <button id="suPrev" class="ghost" style="padding:14px 22px;">Voltar</button>
+    <button id="suFinish" class="primary" style="flex:1;width:auto;">Entrar e conversar</button>
+  </div>`;
+}
+async function suNext(){
+  const err=document.getElementById("suErr");
+  const nome=(S.su.nome||"").trim(), email=(S.su.email||"").trim().toLowerCase(), senha=S.su.senha||"";
+  if(!nome||!email||!senha){err.textContent="Preencha nome, e-mail e senha.";return;}
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){err.textContent="Digite um e-mail válido.";return;}
+  if(senha.length<6){err.textContent="A senha precisa ter ao menos 6 caracteres.";return;}
+  S.su.step=2; render();
+}
+async function finishSignup(){
+  const nome=(S.su.nome||"").trim(), email=(S.su.email||"").trim().toLowerCase(), senha=S.su.senha||"";
+  const { data, error } = await sb.auth.signUp({ email, password:senha, options:{ data:{ name:nome, role:"paciente" } } });
+  if(error){ S.su.step=1; render(); setTimeout(()=>{const e=document.getElementById("suErr"); if(e) e.textContent=/registered/i.test(error.message)?"Já existe uma conta com esse e-mail.":error.message;},50); return; }
+  if(!data.session){ toast("Conta criada! Confirme seu e-mail para entrar."); S.screen="login"; render(); return; }
+  await refreshProfile();
+  if(PROFILE && S.su.motivos.length){ await sb.from('profiles').update({ motivos:S.su.motivos }).eq('id',PROFILE.id); }
+  await afterAuth();
+}
+
+/* ============================================================
+   PERFIL (modal) — paciente, terapeuta e gestão
+   ============================================================ */
+function openProfile(){
+  S.photoPending = undefined;
+  const u = me(); if(!u) return;
+  const root=document.getElementById("modalRoot");
+  let fields="";
+  if(u.role==="paciente"){
+    fields = `
+      ${pf("Nome","mpNome",u.name)}
+      ${pf("Idade","mpIdade",u.idade||"","number")}
+      ${pf("Telefone","mpFone",u.fone||"","tel","(00) 00000-0000")}
+      ${pfArea("Sobre você (opcional)","mpSobre",u.sobre||"","O que você gostaria que seu terapeuta soubesse?")}`;
+  } else if(u.role==="terapeuta"){
+    fields = `
+      ${pf("Nome","mpNome",u.name)}
+      ${pf("CRP","mpCrp",u.crp||"","text","CRP 00/00000")}
+      ${pfArea("Abordagem / bio","mpBio",u.bio||"","Como você trabalha, sua abordagem…")}
+      ${pf("Especialidades (separe por vírgula)","mpEsp",(u.espec||[]).join(", "))}`;
+  } else {
+    fields = `
+      ${pf("Nome","mpNome",u.name)}
+      ${pf("Cargo","mpCargo",u.cargo||"")}`;
+  }
+  root.innerHTML = `
+  <div id="modalOverlay" style="position:fixed;inset:0;background:rgba(45,42,38,.45);backdrop-filter:blur(3px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px;animation:fadeUp .2s ease;">
+    <div style="background:#faf7f1;border-radius:20px;width:100%;max-width:460px;max-height:92vh;overflow-y:auto;box-shadow:0 24px 70px rgba(0,0,0,.3);">
+      <div style="padding:22px 26px;border-bottom:1px solid #ece5d8;display:flex;align-items:center;gap:12px;">
+        <span style="font-family:'Newsreader',serif;font-size:22px;font-weight:500;flex:1;">Meu perfil</span>
+        <span style="font-size:12px;font-weight:700;color:#2d6a4f;background:#f1f7f3;border:1px solid #d8e6dd;padding:4px 10px;border-radius:12px;">${roleLabel(u.role)}</span>
+        <button id="mpClose" style="border:none;background:transparent;font-size:22px;color:#8a847a;line-height:1;">×</button>
+      </div>
+      <div style="padding:26px;">
+        <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:24px;">
+          <div id="mpAvatar" style="position:relative;">${avatar(u,90)}</div>
+          <label style="margin-top:12px;font-size:13px;font-weight:700;color:#3f6b52;cursor:pointer;">
+            Alterar foto<input id="mpPhoto" type="file" accept="image/*" style="display:none;">
+          </label>
+          <div id="mpPhotoNote" style="font-size:11.5px;color:#a39d92;margin-top:2px;"></div>
+        </div>
+        ${fields}
+        <div id="mpErr" style="color:#b5483a;font-size:13px;font-weight:600;min-height:18px;margin:6px 0;"></div>
+        <button id="mpSave" class="primary" style="margin-top:6px;">Salvar perfil</button>
+      </div>
+    </div>
+  </div>`;
+  document.getElementById("mpClose").onclick=closeModal;
+  document.getElementById("modalOverlay").onclick=e=>{ if(e.target.id==="modalOverlay") closeModal(); };
+  document.getElementById("mpSave").onclick=()=>saveProfile(u.role);
+  document.getElementById("mpPhoto").onchange=e=>{
+    const f=e.target.files[0]; if(!f) return;
+    if(f.size>6*1024*1024){ document.getElementById("mpPhotoNote").textContent="Imagem muito grande (máx ~6MB)."; return; }
+    handlePhotoFile(f, dataUrl=>{ S.photoPending=dataUrl; document.getElementById("mpAvatar").innerHTML=`<img src="${dataUrl}" style="width:90px;height:90px;border-radius:50%;object-fit:cover;">`; document.getElementById("mpPhotoNote").textContent="Foto pronta — salve para confirmar."; });
+  };
+}
+function pf(label,id,val,type,ph){ return `<label style="display:block;font-size:13px;font-weight:600;color:#6b655b;margin-bottom:6px;">${label}</label><input id="${id}" class="field" type="${type||'text'}" placeholder="${ph||''}" value="${esc(val)}" style="margin-bottom:16px;">`; }
+function pfArea(label,id,val,ph){ return `<label style="display:block;font-size:13px;font-weight:600;color:#6b655b;margin-bottom:6px;">${label}</label><textarea id="${id}" class="field" placeholder="${ph||''}" style="min-height:80px;resize:vertical;margin-bottom:16px;line-height:1.5;">${esc(val)}</textarea>`; }
+function closeModal(){ const r=document.getElementById("modalRoot"); if(r) r.innerHTML=""; }
+function handlePhotoFile(file, cb){
+  const r=new FileReader();
+  r.onload=()=>{ const img=new Image(); img.onload=()=>{
+    const max=256; let w=img.width,h=img.height; const sc=Math.min(1,max/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
+    const cv=document.createElement("canvas"); cv.width=w; cv.height=h; cv.getContext("2d").drawImage(img,0,0,w,h);
+    try{ cb(cv.toDataURL("image/jpeg",0.82)); }catch(e){ cb(r.result); }
+  }; img.onerror=()=>cb(r.result); img.src=r.result; };
+  r.readAsDataURL(file);
+}
+async function saveProfile(role){
+  const v=id=>{const el=document.getElementById(id);return el?el.value.trim():"";};
+  const u=me(); if(!u) return;
+  const nome=v("mpNome"); if(!nome){document.getElementById("mpErr").textContent="O nome não pode ficar vazio.";return;}
+  const patch={ name:nome };
+  if(S.photoPending!==undefined) patch.photo_url=S.photoPending;
+  if(role==="paciente"){ patch.idade=v("mpIdade")?Number(v("mpIdade")):null; patch.fone=v("mpFone"); patch.sobre=v("mpSobre"); }
+  else if(role==="terapeuta"){ patch.crp=v("mpCrp"); patch.bio=v("mpBio"); patch.espec=v("mpEsp").split(",").map(s=>s.trim()).filter(Boolean); }
+  else { patch.cargo=v("mpCargo"); }
+  const { error } = await sb.from('profiles').update(patch).eq('id', u.id);
+  if(sbErr('Salvar perfil', error)) return;
+  Object.assign(u, patch); u.photo = patch.photo_url!==undefined ? patch.photo_url : u.photo;
+  S.session.name=u.name; S.session.photo=u.photo; S.session.crp=u.crp; S.session.cargo=u.cargo;
+  closeModal(); toast("Perfil salvo."); render();
+}
+
+/* ============================================================
+   PACIENTE — barra de conversas + chat (fundo verde)
+   ============================================================ */
+function renderPatient(){
+  const u=me();
+  app().innerHTML = `
+  <div style="height:100vh;display:flex;flex-direction:column;background:#f3efe8;">
+    <div style="display:flex;align-items:center;gap:14px;padding:13px 22px;background:#fff;border-bottom:1px solid #ece5d8;flex:0 0 auto;z-index:3;">
+      <div style="display:flex;align-items:center;gap:10px;">${logoMark(28,"#3f6b52","#7fae90","#fff")}<span style="font-family:'Newsreader',serif;font-size:19px;font-weight:600;color:#34593f;">${esc(SET.plataforma||"Colo")}</span></div>
+      <div style="flex:1;"></div>
+      <button id="pProfile" title="Meu perfil" style="display:flex;align-items:center;gap:10px;border:none;background:transparent;padding:4px 6px;border-radius:12px;">
+        <div style="text-align:right;line-height:1.2;"><div style="font-weight:700;font-size:14px;">${esc(u.name)}</div><div style="font-size:12px;color:#8a847a;">Meu perfil</div></div>
+        ${avatar(u,38)}
+      </button>
+      <button id="pLogout" title="Sair" style="width:38px;height:38px;border-radius:10px;border:1.5px solid #e2dccf;background:#fff;color:#8a847a;font-size:15px;">⎋</button>
+    </div>
+    <div style="flex:1;display:flex;min-height:0;">
+      <div class="col-list" style="width:320px;flex:0 0 320px;background:#fff;border-right:1px solid #ece5d8;display:flex;flex-direction:column;min-height:0;">
+        <div style="padding:16px 16px 12px;flex:0 0 auto;">
+          <button id="pNew" class="primary" style="display:flex;align-items:center;justify-content:center;gap:8px;font-size:14.5px;padding:12px;"><span style="font-size:17px;line-height:0;">＋</span> Nova conversa</button>
+          <div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#a39d92;font-weight:700;margin:18px 0 4px;padding-left:4px;">Suas conversas</div>
+        </div>
+        <div id="pList" style="flex:1;overflow-y:auto;min-height:0;padding:0 8px 8px;"></div>
+      </div>
+      <div class="col-main show" id="pMain" style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;background:#e8f0ea;"></div>
+    </div>
+  </div>`;
+  app().querySelector("#pProfile").onclick=openProfile;
+  app().querySelector("#pLogout").onclick=logout;
+  app().querySelector("#pNew").onclick=patientNewConv;
+  refreshPatient(true);
+}
+async function patientNewConv(){
+  const id=await createConv(S.session.id); S.pActive=id; await markRead(id,"P"); refreshPatient(true);
+}
+async function refreshPatient(force){
+  await loadUsers();
+  const all=await listConvs();
+  const mine=all.filter(c=>c.patientId===S.session.id).sort((a,b)=>b.lastTs-a.lastTs);
+  // lista
+  const list=document.getElementById("pList"); if(!list) return;
+  const sig=mine.map(c=>c.id+":"+c.lastTs+":"+c.unreadP+":"+(c.therapistId||"")+":"+c.status).join("|");
+  if(list.dataset.sig!==sig){
+    list.dataset.sig=sig;
+    list.innerHTML = mine.length? mine.map(c=>patientConvRow(c)).join("")
+      : `<div style="padding:30px 18px;text-align:center;color:#a39d92;font-size:13.5px;line-height:1.6;">Você ainda não tem conversas.<br>Toque em <b style="color:#3f6b52;">Nova conversa</b> para falar com o plantão.</div>`;
+    list.querySelectorAll("[data-cid]").forEach(el=>el.onclick=async()=>{ S.pActive=el.dataset.cid; await markRead(el.dataset.cid,"P"); refreshPatient(true); });
+  }
+  await renderPatientMain(force, mine);
+}
+function patientConvRow(c){
+  const ther=userById(c.therapistId);
+  const active=c.id===S.pActive;
+  const title = ther? ther.name : "Aguardando atendimento";
+  const av = ther? avatar(ther,46) : `<div style="width:46px;height:46px;border-radius:50%;background:#efe9df;color:#b5763f;display:flex;align-items:center;justify-content:center;font-size:20px;flex:0 0 auto;">⏳</div>`;
+  const sub = c.lastText || (ther?"":"Você está na fila de espera…");
+  return `<div class="convrow" data-cid="${c.id}" style="display:flex;gap:12px;padding:12px;border-radius:13px;margin-bottom:2px;background:${active?'#eef3ef':'transparent'};">
+    ${av}
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-weight:700;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(title)}</span>
+        <span style="flex:1;"></span>
+        <span style="font-size:11.5px;color:#a39d92;flex:0 0 auto;">${c.count?nowHM(c.lastTs):""}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:3px;">
+        <span style="font-size:13px;color:#8a847a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;">${esc(sub)}</span>
+        ${c.unreadP>0?`<span style="background:#3f6b52;color:#fff;font-size:11px;font-weight:700;min-width:19px;height:19px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;flex:0 0 auto;">${c.unreadP}</span>`:''}
+      </div>
+      ${c.status==='aguardando'?'<span style="display:inline-block;margin-top:6px;font-size:11px;font-weight:700;color:#b5763f;background:#fbf0e2;padding:2px 8px;border-radius:8px;">na fila · '+relTime(c.createdAt)+'</span>':''}
+      ${c.status==='encerrado'?'<span style="display:inline-block;margin-top:6px;font-size:11px;font-weight:700;color:#8a847a;background:#f3efe8;padding:2px 8px;border-radius:8px;">encerrada</span>':''}
+    </div></div>`;
+}
+async function renderPatientMain(force, mine){
+  const main=document.getElementById("pMain"); if(!main) return;
+  if(!S.pActive){
+    if(main.dataset.mode!=="empty"){ main.dataset.mode="empty"; main.dataset.sig="";
+      main.innerHTML=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px;color:#6b655b;position:relative;">
+        ${greenPattern("pe")}
+        <div style="position:relative;z-index:1;max-width:340px;">
+          <div style="font-size:42px;margin-bottom:14px;">🌿</div>
+          <h2 style="font-family:'Newsreader',serif;font-weight:500;font-size:26px;margin:0 0 10px;">Estamos aqui pra você</h2>
+          <p style="font-size:15px;line-height:1.6;color:#6b655b;margin:0 0 22px;">Sempre que precisar conversar, inicie um atendimento. Um terapeuta de plantão vai te acolher.</p>
+          <button id="pNewBig" class="primary" style="max-width:240px;">Iniciar conversa</button>
+        </div></div>`;
+      main.querySelector("#pNewBig").onclick=patientNewConv;
+    }
+    return;
+  }
+  const conv=mine.find(c=>c.id===S.pActive); if(!conv) return;
+  const ther=userById(conv.therapistId);
+  const waiting=conv.status==="aguardando";
+  const closed=conv.status==="encerrado";
+  if(main.dataset.mode!=="chat:"+conv.id+":"+conv.status+":"+(conv.therapistId||"")){
+    main.dataset.mode="chat:"+conv.id+":"+conv.status+":"+(conv.therapistId||"");
+    main.innerHTML=`
+      <div style="display:flex;align-items:center;gap:13px;padding:12px 22px;background:#fff;border-bottom:1px solid #ece5d8;flex:0 0 auto;z-index:2;">
+        ${ther? avatar(ther,44) : `<div style="width:44px;height:44px;border-radius:50%;background:#efe9df;color:#b5763f;display:flex;align-items:center;justify-content:center;font-size:19px;">⏳</div>`}
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:16px;">${ther?esc(ther.name):"Aguardando atendimento"}</div>
+          <div style="font-size:12.5px;color:#8a847a;margin-top:1px;">${ther?esc(ther.crp||"Terapeuta de plantão"):"Você está na fila — já já alguém te atende"}</div>
+        </div>
+      </div>
+      <div id="pScroll" style="flex:1;overflow-y:auto;min-height:0;position:relative;background:#e8f0ea;">
+        ${greenPattern(conv.id)}
+        <div id="pMsgs" style="position:relative;z-index:1;max-width:1400px;margin:0 auto;display:flex;flex-direction:column;gap:14px;padding:26px clamp(16px,4vw,48px);"></div>
+      </div>
+      <div style="flex:0 0 auto;padding:13px 24px;background:#fff;border-top:1px solid #ece5d8;">
+        <div id="pRecBar" style="display:none;align-items:center;gap:12px;margin-bottom:10px;background:#fbecea;border:1px solid #f0cfca;border-radius:12px;padding:10px 14px;">
+          <span style="width:11px;height:11px;border-radius:50%;background:#cf4f3d;animation:pulse 1.4s infinite;"></span>
+          <span style="font-weight:700;color:#b5483a;font-size:14px;">Gravando… <span id="pRecTime">0:00</span></span>
+          <span style="flex:1;"></span>
+          <button id="pRecCancel" style="border:none;background:transparent;color:#8a847a;font-weight:700;font-size:13px;">Cancelar</button>
+          <button id="pRecStop" style="border:none;background:#3f6b52;color:#fff;font-weight:700;font-size:13px;padding:8px 16px;border-radius:9px;">Enviar áudio</button>
+        </div>
+        ${closed? `<div style="text-align:center;color:#8a847a;font-size:13.5px;padding:8px 0;">Este atendimento foi encerrado. Toque em <b style="color:#3f6b52;cursor:pointer;" id="pFromClosed">Nova conversa</b> para falar de novo.</div>`
+        : `<div style="display:flex;align-items:center;gap:12px;">
+            <input id="pDraft" placeholder="Escreva como você está se sentindo…" style="flex:1;padding:13px 18px;border:1.5px solid #e2dccf;border-radius:22px;font-size:15px;background:#faf7f1;">
+            <button id="pMic" title="Gravar áudio" style="width:44px;height:44px;border-radius:50%;border:none;background:#f0eadf;color:#6b655b;font-size:18px;flex:0 0 auto;">🎤</button>
+            <button id="pSend" style="width:46px;height:46px;border-radius:50%;border:none;background:#3f6b52;color:#fff;font-size:19px;flex:0 0 auto;box-shadow:0 4px 12px rgba(63,107,82,.25);">➤</button>
+          </div>`}
+        <div style="text-align:center;margin-top:9px;font-size:11.5px;color:#a39d92;">Em emergência, ligue <b style="color:#8a847a;">SAMU 192</b> · <b style="color:#8a847a;">CVV 188</b> (apoio emocional 24h)</div>
+      </div>`;
+    if(!closed){
+      main.querySelector("#pSend").onclick=sendPatient;
+      main.querySelector("#pDraft").onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendPatient();}};
+      main.querySelector("#pMic").onclick=startRecording;
+      main.querySelector("#pRecStop").onclick=()=>stopRecording(true);
+      main.querySelector("#pRecCancel").onclick=()=>stopRecording(false);
+    } else { const f=main.querySelector("#pFromClosed"); if(f) f.onclick=patientNewConv; }
+  }
+  await refreshConvMessages(S.pActive, "pMsgs", "pScroll", true, force);
+}
+async function sendPatient(){
+  const inp=document.getElementById("pDraft"); const t=(inp.value||"").trim(); if(!t||!S.pActive) return;
+  inp.value="";
+  await pushMsg(S.pActive,{id:uid(),from:"paciente",kind:"text",text:t,ts:Date.now()});
+  await markRead(S.pActive,"P");
+  refreshPatient(true);
+}
+
+/* ============================================================
+   TERAPEUTA — fila + meus atendimentos (exclusivo)
+   ============================================================ */
+function renderTherapist(){
+  const u=me();
+  app().innerHTML = `
+  <div style="height:100vh;display:flex;flex-direction:column;background:#f3efe8;">
+    <div style="display:flex;align-items:center;gap:16px;padding:12px 22px;background:#fff;border-bottom:1px solid #ece5d8;flex:0 0 auto;z-index:3;">
+      <div style="display:flex;align-items:center;gap:10px;">${logoMark(28,"#3f6b52","#7fae90","#fff")}<span style="font-family:'Newsreader',serif;font-size:19px;font-weight:600;color:#34593f;">${esc(SET.plataforma||"Colo")}</span></div>
+      <div style="display:flex;align-items:center;gap:8px;background:#f1f7f3;border:1px solid #d8e6dd;padding:6px 13px;border-radius:20px;font-size:13px;color:#2d6a4f;font-weight:600;"><span style="width:8px;height:8px;border-radius:50%;background:#3fb56a;animation:blink 1.8s infinite;"></span>Plantão 24h ativo</div>
+      <div style="flex:1;"></div>
+      <button id="tProfile" title="Meu perfil" style="display:flex;align-items:center;gap:10px;border:none;background:transparent;padding:4px 6px;border-radius:12px;">
+        <div style="text-align:right;line-height:1.2;"><div style="font-weight:700;font-size:14px;">${esc(u.name)}</div><div style="font-size:12px;color:#8a847a;">${esc(u.crp||"Meu perfil")}</div></div>
+        ${avatar(u,40)}
+      </button>
+      <button id="tLogout" title="Sair" style="width:38px;height:38px;border-radius:10px;border:1.5px solid #e2dccf;background:#fff;color:#8a847a;font-size:15px;">⎋</button>
+    </div>
+    <div style="flex:1;display:flex;min-height:0;">
+      <div class="col-list" style="width:330px;flex:0 0 330px;background:#fff;border-right:1px solid #ece5d8;display:flex;flex-direction:column;min-height:0;">
+        <div style="padding:16px 16px 10px;flex:0 0 auto;">
+          <div style="display:flex;align-items:center;gap:9px;background:#f3efe8;border-radius:11px;padding:10px 13px;margin-bottom:13px;"><span style="color:#a39d92;font-size:15px;">⌕</span><input id="tSearch" placeholder="Buscar paciente" style="border:none;background:transparent;font-size:14px;flex:1;"></div>
+          <div style="display:flex;gap:7px;">
+            <button class="ttab" data-t="aguardando" style="${tabPill(S.tTab==='aguardando')}">Aguardando <span id="tWaitN">·0</span></button>
+            <button class="ttab" data-t="meus" style="${tabPill(S.tTab==='meus')}">Meus <span id="tMineN">·0</span></button>
+          </div>
+        </div>
+        <div id="tList" style="flex:1;overflow-y:auto;min-height:0;padding:0 8px 8px;"></div>
+      </div>
+      <div class="col-main show" id="tMain" style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;background:#e8f0ea;"></div>
+      <div class="col-info" id="tInfo" style="width:288px;flex:0 0 288px;background:#fff;border-left:1px solid #ece5d8;padding:24px 22px;overflow-y:auto;min-height:0;"></div>
+    </div>
+  </div>`;
+  app().querySelector("#tProfile").onclick=openProfile;
+  app().querySelector("#tLogout").onclick=logout;
+  app().querySelector("#tSearch").oninput=()=>refreshTherapist(false);
+  app().querySelectorAll(".ttab").forEach(b=>b.onclick=()=>{S.tTab=b.dataset.t;S.tActive=null;render();});
+  refreshTherapist(true);
+}
+function tabPill(a){ return `flex:1;padding:8px 6px;border:none;border-radius:10px;font-size:13px;font-weight:700;background:${a?'#3f6b52':'#f3efe8'};color:${a?'#fff':'#8a847a'};`; }
+async function refreshTherapist(force){
+  await loadUsers(); const on=await onlineEmails();
+  const all=await listConvs();
+  const waiting=all.filter(c=>c.status==="aguardando"&&(c.pcount||c.count)>0).sort((a,b)=>a.createdAt-b.createdAt);
+  const mine=all.filter(c=>c.therapistId===S.session.id).sort((a,b)=>b.lastTs-a.lastTs);
+  const wN=document.getElementById("tWaitN"), mN=document.getElementById("tMineN");
+  if(wN) wN.textContent="·"+waiting.length; if(mN) mN.textContent="·"+mine.length;
+  const search=(document.getElementById("tSearch")?.value||"").toLowerCase();
+  const rows=(S.tTab==="aguardando"?waiting:mine).filter(c=>{const p=userById(c.patientId);return !search||(p&&p.name.toLowerCase().includes(search));});
+  const list=document.getElementById("tList"); if(!list) return;
+  const sig=S.tTab+"|"+rows.map(c=>c.id+":"+c.lastTs+":"+c.unreadT+":"+c.status).join("|");
+  if(list.dataset.sig!==sig){
+    list.dataset.sig=sig;
+    list.innerHTML=rows.length? rows.map(c=>therapistConvRow(c,on)).join("")
+      : `<div style="padding:30px 18px;text-align:center;color:#a39d92;font-size:13.5px;line-height:1.6;">${S.tTab==='aguardando'?'Ninguém na fila agora 🌿':'Você ainda não puxou nenhum atendimento.'}</div>`;
+    list.querySelectorAll("[data-cid]").forEach(el=>el.onclick=async()=>{ S.tActive=el.dataset.cid; if(S.tTab==="meus") await markRead(el.dataset.cid,"T"); refreshTherapist(true); });
+  }
+  if(!S.tActive && rows[0]) S.tActive=rows[0].id;
+  await renderTherapistMain(force,on);
+}
+function therapistConvRow(c,on){
+  const p=userById(c.patientId); const active=c.id===S.tActive;
+  const online= p && on[emailOf(p.id)];
+  const waiting=c.status==="aguardando";
+  return `<div class="convrow" data-cid="${c.id}" style="display:flex;gap:12px;padding:12px;border-radius:13px;margin-bottom:2px;background:${active?'#eef3ef':'transparent'};">
+    <div style="position:relative;flex:0 0 auto;">${avatar(p,46)}${online?'<span style="position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-radius:50%;background:#3fb56a;border:2.5px solid #fff;"></span>':''}</div>
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-weight:700;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p?esc(p.name):"Paciente"}</span>
+        <span style="flex:1;"></span>
+        <span style="font-size:11.5px;color:#a39d92;flex:0 0 auto;">${nowHM(c.lastTs)}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:3px;">
+        <span style="font-size:13px;color:#8a847a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;">${esc(c.lastText||"—")}</span>
+        ${c.unreadT>0?`<span style="background:#3f6b52;color:#fff;font-size:11px;font-weight:700;min-width:19px;height:19px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;flex:0 0 auto;">${c.unreadT}</span>`:''}
+      </div>
+      ${waiting?'<span style="display:inline-block;margin-top:6px;font-size:11px;font-weight:700;color:#b5763f;background:#fbf0e2;padding:2px 8px;border-radius:8px;">aguardando · '+relTime(c.createdAt)+'</span>':(c.status==='encerrado'?'<span style="display:inline-block;margin-top:6px;font-size:11px;font-weight:700;color:#8a847a;background:#f3efe8;padding:2px 8px;border-radius:8px;">encerrado</span>':'')}
+    </div></div>`;
+}
+function emailOf(id){ for(const e in USERS){ if(USERS[e].id===id) return e; } return ""; }
+async function renderTherapistMain(force,on){
+  const main=document.getElementById("tMain"), info=document.getElementById("tInfo");
+  if(!main) return;
+  if(!S.tActive){ main.dataset.mode="none"; main.innerHTML=`<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#a39d92;font-size:14px;position:relative;">${greenPattern('tn')}<span style="position:relative;z-index:1;">Selecione um atendimento à esquerda.</span></div>`; if(info) info.innerHTML=""; return; }
+  const c=await getConv(S.tActive); if(!c){ main.innerHTML=""; return; }
+  const p=userById(c.patientId);
+  const isMine=c.therapistId===S.session.id;
+  const isWaiting=c.status==="aguardando";
+  const mode="tchat:"+c.id+":"+c.status+":"+isMine;
+  if(main.dataset.mode!==mode){
+    main.dataset.mode=mode;
+    const composer = isWaiting
+      ? `<div style="padding:16px 22px;background:#fff;border-top:1px solid #ece5d8;display:flex;align-items:center;gap:14px;">
+           <div style="flex:1;font-size:13.5px;color:#6b655b;">Esta conversa está na fila. Ao atender, ela passa a ser <b>exclusiva sua</b> — nenhum outro terapeuta verá.</div>
+           <button id="tClaim" class="primary" style="width:auto;padding:13px 22px;">Atender este paciente</button>
+         </div>`
+      : (c.status==="encerrado"
+        ? `<div style="padding:16px 22px;background:#fff;border-top:1px solid #ece5d8;display:flex;align-items:center;gap:14px;"><div style="flex:1;font-size:13.5px;color:#8a847a;">Atendimento encerrado.</div><button id="tReopen" class="ghost">Reabrir</button></div>`
+        : `<div style="flex:0 0 auto;background:#fff;border-top:1px solid #ece5d8;padding:12px 22px 14px;">
+            <div id="tRecBar" style="display:none;align-items:center;gap:12px;margin-bottom:10px;background:#fbecea;border:1px solid #f0cfca;border-radius:12px;padding:10px 14px;"><span style="width:11px;height:11px;border-radius:50%;background:#cf4f3d;animation:pulse 1.4s infinite;"></span><span style="font-weight:700;color:#b5483a;font-size:14px;">Gravando… <span id="tRecTime">0:00</span></span><span style="flex:1;"></span><button id="tRecCancel" style="border:none;background:transparent;color:#8a847a;font-weight:700;font-size:13px;">Cancelar</button><button id="tRecStop" style="border:none;background:#3f6b52;color:#fff;font-weight:700;font-size:13px;padding:8px 16px;border-radius:9px;">Enviar áudio</button></div>
+            <div style="display:flex;gap:8px;margin-bottom:11px;flex-wrap:wrap;">${(SET.quickReplies||DEFAULT_SET.quickReplies).map(t=>`<button class="tq" data-t="${esc(t)}" style="background:#f1f7f3;border:1px solid #d8e6dd;color:#2d6a4f;font-size:12.5px;font-weight:600;padding:6px 13px;border-radius:16px;">${esc(t)}</button>`).join("")}</div>
+            <div style="display:flex;align-items:center;gap:11px;">
+              <input id="tDraft" placeholder="Responda com cuidado…" style="flex:1;padding:13px 18px;border:1.5px solid #e2dccf;border-radius:22px;font-size:15px;background:#faf7f1;">
+              <button id="tMic" title="Gravar áudio" style="width:44px;height:44px;border-radius:50%;border:none;background:#f0eadf;color:#6b655b;font-size:18px;flex:0 0 auto;">🎤</button>
+              <button id="tSend" style="width:46px;height:46px;border-radius:50%;border:none;background:#3f6b52;color:#fff;font-size:19px;flex:0 0 auto;box-shadow:0 4px 12px rgba(63,107,82,.25);">➤</button>
+            </div>
+          </div>`);
+    main.innerHTML=`
+      <div style="display:flex;align-items:center;gap:13px;padding:12px 22px;background:#fff;border-bottom:1px solid #ece5d8;flex:0 0 auto;z-index:2;">
+        ${avatar(p,44)}
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:700;font-size:15.5px;">${p?esc(p.name):"Paciente"}</span>${p&&p.idade?`<span style="font-size:12.5px;color:#8a847a;">${p.idade} anos</span>`:''}</div>
+          <div style="font-size:12.5px;color:#8a847a;margin-top:1px;">${isWaiting?'na fila de espera':(c.status==='encerrado'?'encerrado':'em atendimento com você')}</div>
+        </div>
+      </div>
+      <div id="tScroll" style="flex:1;overflow-y:auto;min-height:0;position:relative;background:#e8f0ea;">${greenPattern(c.id)}<div id="tMsgs" style="position:relative;z-index:1;max-width:1400px;margin:0 auto;display:flex;flex-direction:column;gap:8px;padding:22px clamp(16px,4vw,48px);"></div></div>
+      ${composer}`;
+    if(isWaiting){ main.querySelector("#tClaim").onclick=async()=>{ if(await claimConv(c.id)){ S.tTab="meus"; S.tActive=c.id; toast("Atendimento iniciado. Agora é só seu."); refreshTherapist(true);} }; }
+    else if(c.status==="encerrado"){ main.querySelector("#tReopen").onclick=async()=>{ await reopenConv(c.id); refreshTherapist(true); }; }
+    else {
+      main.querySelector("#tSend").onclick=sendTherapist;
+      main.querySelector("#tDraft").onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendTherapist();}};
+      main.querySelectorAll(".tq").forEach(b=>b.onclick=()=>quickReply(b.dataset.t));
+      main.querySelector("#tMic").onclick=()=>startRecording("terapeuta");
+      main.querySelector("#tRecStop").onclick=()=>stopRecording(true);
+      main.querySelector("#tRecCancel").onclick=()=>stopRecording(false);
+    }
+  }
+  await refreshConvMessages(c.id,"tMsgs","tScroll",false,force);
+  await renderTherapistInfo(p,c,on,isMine);
+}
+async function renderTherapistInfo(p,c,on,isMine){
+  const info=document.getElementById("tInfo"); if(!info||!p) return;
+  const notes=await getNotes(c.id);
+  const online=on[emailOf(p.id)];
+  const sig="info:"+c.id+":"+(p.photo?"ph":"")+":"+p.name+":"+(online?1:0)+":"+isMine;
+  if(info.dataset.sig===sig) return;
+  info.dataset.sig=sig;
+  info.innerHTML=`
+    <div style="display:flex;flex-direction:column;align-items:center;text-align:center;">
+      ${avatar(p,72)}
+      <div style="font-family:'Newsreader',serif;font-size:21px;font-weight:500;margin-top:12px;">${esc(p.name)}</div>
+      <div style="font-size:13px;color:#8a847a;margin-top:2px;">${p.idade?p.idade+' anos · ':''}${online?'online agora':'offline'}</div>
+      ${p.fone?`<div style="font-size:12.5px;color:#8a847a;margin-top:2px;">${esc(p.fone)}</div>`:''}
+    </div>
+    ${p.sobre?`<div style="font-size:13.5px;color:#6b655b;line-height:1.55;background:#faf7f1;border:1px solid #ece5d8;border-radius:11px;padding:12px;margin:18px 0 0;">${esc(p.sobre)}</div>`:''}
+    <div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#a39d92;font-weight:700;margin:22px 0 10px;">O que o(a) trouxe</div>
+    <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:24px;">${(p.motivos&&p.motivos.length?p.motivos:["—"]).map(t=>`<span style="background:#f3efe8;color:#6b655b;font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:14px;">${esc(t)}</span>`).join("")}</div>
+    <div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#a39d92;font-weight:700;margin-bottom:10px;">Anotações da sessão</div>
+    <textarea id="tNotes" ${isMine?'':'disabled'} placeholder="${isMine?'Registre observações…':'Somente o terapeuta responsável edita.'}" style="width:100%;min-height:96px;resize:vertical;padding:12px;border:1.5px solid #e2dccf;border-radius:11px;font-size:13.5px;line-height:1.5;background:${isMine?'#faf7f1':'#f3efe8'};margin-bottom:6px;">${esc(notes)}</textarea>
+    <div id="tNotesStatus" style="font-size:11.5px;color:#a39d92;min-height:14px;margin-bottom:14px;"></div>
+    ${isMine&&c.status!=="encerrado"?`<button id="tClose" style="width:100%;padding:12px;border:none;border-radius:11px;background:#f7ece9;color:#b5483a;font-size:13.5px;font-weight:700;">Encerrar atendimento</button>`:''}`;
+  if(isMine){
+    let tmr; const nt=info.querySelector("#tNotes");
+    nt.oninput=e=>{ clearTimeout(tmr); const st=info.querySelector("#tNotesStatus"); if(st)st.textContent="salvando…"; tmr=setTimeout(async()=>{ await setNotes(c.id,e.target.value); const s2=document.getElementById("tNotesStatus"); if(s2)s2.textContent="✓ salvo"; },600); };
+    const cl=info.querySelector("#tClose"); if(cl) cl.onclick=async()=>{ await closeConv(c.id); toast("Atendimento encerrado."); refreshTherapist(true); };
+  }
+}
+async function sendTherapist(){
+  const inp=document.getElementById("tDraft"); const t=(inp.value||"").trim(); if(!t||!S.tActive) return;
+  inp.value="";
+  await pushMsg(S.tActive,{id:uid(),from:"terapeuta",kind:"text",text:t,ts:Date.now()});
+  await markRead(S.tActive,"T");
+  refreshTherapist(true);
+}
+async function quickReply(t){ if(!S.tActive) return; await pushMsg(S.tActive,{id:uid(),from:"terapeuta",kind:"text",text:t,ts:Date.now()}); await markRead(S.tActive,"T"); refreshTherapist(true); }
+
+/* ============================================================
+   GESTÃO — equipe + todas as conversas (somente leitura)
+   ============================================================ */
+function renderGestao(){
+  const u=me();
+  app().innerHTML = `
+  <div style="height:100vh;display:flex;flex-direction:column;background:#f3efe8;">
+    <div style="display:flex;align-items:center;gap:16px;padding:12px 22px;background:#fff;border-bottom:1px solid #ece5d8;flex:0 0 auto;z-index:3;">
+      <div style="display:flex;align-items:center;gap:10px;">${logoMark(28,"#3f6b52","#7fae90","#fff")}<span style="font-family:'Newsreader',serif;font-size:19px;font-weight:600;color:#34593f;">${esc(SET.plataforma||"Colo")}</span><span style="font-size:12px;font-weight:700;color:#b5763f;background:#fbf0e2;padding:4px 10px;border-radius:12px;margin-left:4px;">Gestão</span></div>
+      <div style="display:flex;gap:6px;background:#efe9df;padding:4px;border-radius:11px;margin-left:6px;">
+        <button class="gtab" data-v="relatorios" style="${tabPill2(S.gView==='relatorios')}">Relatórios</button>
+        <button class="gtab" data-v="conversas" style="${tabPill2(S.gView==='conversas')}">Conversas</button>
+        <button class="gtab" data-v="equipe" style="${tabPill2(S.gView==='equipe')}">Equipe</button>
+        <button class="gtab" data-v="configuracoes" style="${tabPill2(S.gView==='configuracoes')}">Configurações</button>
+      </div>
+      <div style="flex:1;"></div>
+      <button id="gProfile" title="Meu perfil" style="display:flex;align-items:center;gap:10px;border:none;background:transparent;padding:4px 6px;border-radius:12px;">
+        <div style="text-align:right;line-height:1.2;"><div style="font-weight:700;font-size:14px;">${esc(u.name)}</div><div style="font-size:12px;color:#8a847a;">${esc(u.cargo||"Gestão")}</div></div>
+        ${avatar(u,40)}
+      </button>
+      <button id="gLogout" title="Sair" style="width:38px;height:38px;border-radius:10px;border:1.5px solid #e2dccf;background:#fff;color:#8a847a;font-size:15px;">⎋</button>
+    </div>
+    <div id="gBody" style="flex:1;display:flex;min-height:0;"></div>
+  </div>`;
+  app().querySelector("#gProfile").onclick=openProfile;
+  app().querySelector("#gLogout").onclick=logout;
+  app().querySelectorAll(".gtab").forEach(b=>b.onclick=()=>{S.gView=b.dataset.v;S.gActive=null;render();});
+  refreshGestao(true);
+}
+function tabPill2(a){ return `padding:8px 16px;border:none;border-radius:9px;font-size:13.5px;font-weight:700;background:${a?'#fff':'transparent'};color:${a?'#2d6a4f':'#8a847a'};box-shadow:${a?'0 1px 3px rgba(45,42,38,.1)':'none'};`; }
+async function refreshGestao(force){
+  await loadUsers(); const on=await onlineEmails();
+  const body=document.getElementById("gBody"); if(!body) return;
+  if(S.gView==="equipe"){ await gestaoEquipe(body,on); return; }
+  if(S.gView==="relatorios"){ await gestaoRelatorios(body,on); return; }
+  if(S.gView==="configuracoes"){ await gestaoConfig(body); return; }
+  // conversas
+  if(body.dataset.mode!=="conv"){
+    body.dataset.mode="conv";
+    body.innerHTML=`
+      <div class="col-list" style="width:340px;flex:0 0 340px;background:#fff;border-right:1px solid #ece5d8;display:flex;flex-direction:column;min-height:0;">
+        <div style="padding:16px 16px 10px;flex:0 0 auto;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${[["todas","Todas"],["aguardando","Fila"],["ativo","Em atendimento"],["encerrado","Encerradas"]].map(([k,l])=>`<button class="gfil" data-f="${k}" style="${chipFil(S.gFilter===k)}">${l}</button>`).join("")}
+          </div>
+        </div>
+        <div id="gList" style="flex:1;overflow-y:auto;min-height:0;padding:0 8px 8px;"></div>
+      </div>
+      <div class="col-main show" id="gMain" style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;background:#e8f0ea;"></div>`;
+    body.querySelectorAll(".gfil").forEach(b=>b.onclick=()=>{S.gFilter=b.dataset.f;S.gActive=null;refreshGestao(true);});
+  }
+  const all=(await listConvs()).sort((a,b)=>b.lastTs-a.lastTs);
+  const filtered=all.filter(c=>S.gFilter==="todas"||c.status===S.gFilter).filter(c=>(c.pcount||c.count)>0||c.status!=="aguardando");
+  const list=document.getElementById("gList");
+  const sig=S.gFilter+"|"+filtered.map(c=>c.id+":"+c.lastTs+":"+c.status+":"+(c.therapistId||"")).join("|");
+  if(list.dataset.sig!==sig){
+    list.dataset.sig=sig;
+    list.innerHTML=filtered.length?filtered.map(c=>gestaoConvRow(c)).join(""):`<div style="padding:30px 18px;text-align:center;color:#a39d92;font-size:13.5px;">Nenhuma conversa nesse filtro.</div>`;
+    list.querySelectorAll("[data-cid]").forEach(el=>el.onclick=()=>{S.gActive=el.dataset.cid;refreshGestao(true);});
+  }
+  if(!S.gActive&&filtered[0]) S.gActive=filtered[0].id;
+  await gestaoMain(force);
+}
+function chipFil(a){ return `padding:7px 12px;border:1.5px solid ${a?'#3f6b52':'#e2dccf'};border-radius:14px;font-size:12.5px;font-weight:700;background:${a?'#eaf3ee':'#fff'};color:${a?'#2d6a4f':'#8a847a'};`; }
+function statusTag(s){ const m={aguardando:["#b5763f","#fbf0e2","na fila"],ativo:["#2d6a4f","#f1f7f3","em atendimento"],encerrado:["#8a847a","#f3efe8","encerrado"]}[s]; return `<span style="font-size:11px;font-weight:700;color:${m[0]};background:${m[1]};padding:2px 8px;border-radius:8px;">${m[2]}</span>`; }
+function gestaoConvRow(c){
+  const p=userById(c.patientId), t=userById(c.therapistId), active=c.id===S.gActive;
+  return `<div class="convrow" data-cid="${c.id}" style="display:flex;gap:11px;padding:12px;border-radius:13px;margin-bottom:2px;background:${active?'#eef3ef':'transparent'};">
+    ${avatar(p,44)}
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;align-items:center;gap:6px;"><span style="font-weight:700;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p?esc(p.name):"Paciente"}</span><span style="flex:1;"></span><span style="font-size:11.5px;color:#a39d92;">${nowHM(c.lastTs)}</span></div>
+      <div style="font-size:13px;color:#8a847a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px;">${esc(c.lastText||"—")}</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">${statusTag(c.status)}${t?`<span style="font-size:11px;color:#6b655b;">com ${esc(t.name.split(" ").slice(0,2).join(" "))}</span>`:''}</div>
+    </div></div>`;
+}
+async function gestaoMain(force){
+  const main=document.getElementById("gMain"); if(!main) return;
+  if(!S.gActive){ main.innerHTML=`<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#a39d92;font-size:14px;position:relative;">${greenPattern('gn')}<span style="position:relative;z-index:1;">Selecione uma conversa.</span></div>`; return; }
+  const c=await getConv(S.gActive); if(!c) return;
+  const p=userById(c.patientId), t=userById(c.therapistId);
+  const mode="g:"+c.id+":"+c.status+":"+(c.therapistId||"");
+  if(main.dataset.mode!==mode){
+    main.dataset.mode=mode;
+    main.innerHTML=`
+      <div style="display:flex;align-items:center;gap:13px;padding:12px 22px;background:#fff;border-bottom:1px solid #ece5d8;flex:0 0 auto;z-index:2;">
+        ${avatar(p,44)}
+        <div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:15.5px;">${p?esc(p.name):"Paciente"}</div><div style="font-size:12.5px;color:#8a847a;margin-top:1px;">${statusTagText(c.status)}${t?' · '+esc(t.name):''}</div></div>
+      </div>
+      <div id="gScroll" style="flex:1;overflow-y:auto;min-height:0;position:relative;background:#e8f0ea;">${greenPattern(c.id+"g")}<div id="gMsgs" style="position:relative;z-index:1;max-width:1400px;margin:0 auto;display:flex;flex-direction:column;gap:8px;padding:22px clamp(16px,4vw,48px);"></div></div>
+      <div style="flex:0 0 auto;padding:14px 22px;background:#fff;border-top:1px solid #ece5d8;text-align:center;font-size:13px;color:#8a847a;">👁 Visualização da gestão · somente leitura</div>`;
+  }
+  await refreshConvMessages(c.id,"gMsgs","gScroll",false,force,true);
+}
+function statusTagText(s){ return {aguardando:"na fila de espera",ativo:"em atendimento",encerrado:"encerrado"}[s]; }
+async function gestaoEquipe(body,on){
+  if(body.dataset.mode!=="equipe"){
+    body.dataset.mode="equipe";
+    body.innerHTML=`<div style="flex:1;overflow-y:auto;padding:30px;"><div id="gTeam" style="max-width:920px;margin:0 auto;"></div></div>`;
+  }
+  const all=await listConvs();
+  const team=Object.values(USERS).filter(u=>u.role==="terapeuta"||u.role==="gestao");
+  const teamEl=document.getElementById("gTeam");
+  const cardsTher=team.filter(u=>u.role==="terapeuta").map(u=>{
+    const ativos=all.filter(c=>c.therapistId===u.id&&c.status==="ativo").length;
+    const online=on[emailOf(u.id)];
+    return `<div style="background:#fff;border:1px solid #ece5d8;border-radius:16px;padding:20px;display:flex;gap:14px;align-items:flex-start;">
+      <div style="position:relative;">${avatar(u,52)}<span style="position:absolute;right:-1px;bottom:-1px;width:13px;height:13px;border-radius:50%;background:${online?'#3fb56a':'#cbc4b7'};border:2.5px solid #fff;"></span></div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:16px;">${esc(u.name)}</div>
+        <div style="font-size:12.5px;color:#8a847a;margin-bottom:8px;">${esc(u.crp||"")} · ${online?'online':'offline'}</div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px;">${(u.espec||[]).map(e=>`<span style="background:#f3efe8;color:#6b655b;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:12px;">${esc(e)}</span>`).join("")}</div>
+        <div style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:#2d6a4f;background:#f1f7f3;border:1px solid #d8e6dd;padding:4px 11px;border-radius:12px;">${ativos} atendimento${ativos===1?'':'s'} ativo${ativos===1?'':'s'}</div>
+      </div></div>`;
+  }).join("");
+  const waiting=all.filter(c=>c.status==="aguardando"&&(c.pcount||c.count)>0).length;
+  const ativos=all.filter(c=>c.status==="ativo").length;
+  const encer=all.filter(c=>c.status==="encerrado").length;
+  teamEl.innerHTML=`
+    <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:24px;">
+      <div style="flex:1;">
+        <h2 style="font-family:'Newsreader',serif;font-weight:500;font-size:26px;margin:0 0 4px;">Equipe & plantão</h2>
+        <p style="color:#8a847a;font-size:14px;margin:0;">Visão geral do atendimento agora.</p>
+      </div>
+      <button id="gAddPro" class="primary" style="width:auto;padding:11px 18px;font-size:14px;white-space:nowrap;">＋ Adicionar profissional</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:28px;">
+      ${stat("Na fila",waiting,"#b5763f")}${stat("Em atendimento",ativos,"#2d6a4f")}${stat("Encerrados",encer,"#8a847a")}
+    </div>
+    <div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#a39d92;font-weight:700;margin-bottom:12px;">Terapeutas</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">${cardsTher}</div>`;
+  const addBtn=document.getElementById("gAddPro"); if(addBtn) addBtn.onclick=openAddProfessional;
+}
+function stat(label,n,color){ return `<div style="background:#fff;border:1px solid #ece5d8;border-radius:16px;padding:18px 20px;"><div style="font-family:'Newsreader',serif;font-size:34px;font-weight:500;color:${color};line-height:1;">${n}</div><div style="font-size:13px;color:#8a847a;margin-top:6px;">${label}</div></div>`; }
+
+/* ---------- Relatórios (gestão) ---------- */
+function fmtDur(ms){ if(ms==null||isNaN(ms)) return "—"; const m=Math.round(ms/60000); if(m<1) return "menos de 1 min"; if(m<60) return m+" min"; const h=Math.floor(m/60), r=m%60; return h+" h"+(r?(" "+r+" min"):""); }
+function repCard(label,value,sub){ return `<div style="background:#fff;border:1px solid #ece5d8;border-radius:16px;padding:18px 20px;"><div style="font-size:13px;color:#8a847a;">${label}</div><div style="font-family:'Newsreader',serif;font-size:28px;font-weight:500;color:#34593f;line-height:1.12;margin-top:6px;">${value}</div>${sub?`<div style="font-size:12px;color:#a39d92;margin-top:5px;line-height:1.4;">${sub}</div>`:''}</div>`; }
+function chartCard(title,inner){ return `<div style="background:#fff;border:1px solid #ece5d8;border-radius:16px;padding:20px 22px;"><div style="font-weight:700;font-size:14.5px;margin-bottom:16px;">${title}</div>${inner}</div>`; }
+function barChart(items,accent){ const max=Math.max(1,...items.map(i=>i.value)); return `<div style="display:flex;flex-direction:column;gap:11px;">`+items.map(i=>`<div style="display:flex;align-items:center;gap:12px;"><div style="width:104px;font-size:12.5px;color:#6b655b;flex:0 0 auto;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(i.label)}</div><div style="flex:1;height:22px;background:#f3efe8;border-radius:7px;overflow:hidden;"><div style="height:100%;width:${Math.round(i.value/max*100)}%;background:${accent};border-radius:7px;min-width:${i.value?'6px':'0'};transition:width .4s ease;"></div></div><div style="width:28px;font-size:13px;font-weight:700;flex:0 0 auto;">${i.value}</div></div>`).join("")+`</div>`; }
+async function gatherReport(){
+  const convs=await listConvs();
+  const real=convs.filter(c=>(c.pcount||c.count)>0);
+  const fila=real.filter(c=>c.status==="aguardando").length;
+  const ativo=convs.filter(c=>c.status==="ativo").length;
+  const encer=convs.filter(c=>c.status==="encerrado").length;
+  const pac=new Set(real.map(c=>c.patientId)).size;
+  const waits=[]; const porTher={}; const horas=[0,0,0,0];
+  for(const c of convs){
+    if(c.therapistId){
+      porTher[c.therapistId]=(porTher[c.therapistId]||0)+1;
+      if(c.claimedAt&&c.createdAt) waits.push(Math.max(0,c.claimedAt-c.createdAt));
+    }
+    if((c.pcount||c.count)>0&&c.createdAt){ const h=new Date(c.createdAt).getHours(); horas[Math.floor(h/6)]++; }
+  }
+  // total de mensagens (exceto 'sistema') numa só consulta de contagem
+  let totalMsgs=0;
+  const { count } = await sb.from('messages').select('id',{count:'exact',head:true}).neq('sender_role','sistema');
+  if(typeof count==='number') totalMsgs=count;
+  const avgWait=waits.length?waits.reduce((a,b)=>a+b,0)/waits.length:null;
+  const therItems=Object.keys(porTher).map(id=>{const u=userById(id);return {label:u?u.name.replace(/^Dra?\.\s*/,""):"—",value:porTher[id]};}).sort((a,b)=>b.value-a.value);
+  const mc={}; Object.values(USERS).filter(u=>u.role==="paciente").forEach(u=>(u.motivos||[]).forEach(m=>mc[m]=(mc[m]||0)+1));
+  const motivos=Object.keys(mc).map(k=>({label:k,value:mc[k]})).sort((a,b)=>b.value-a.value).slice(0,6);
+  return {fila,ativo,encer,total:real.length,pac,totalMsgs,avgWait,therItems,horas,motivos};
+}
+async function gestaoRelatorios(body,on){
+  if(body.dataset.mode!=="relatorios"){ body.dataset.mode="relatorios"; body.dataset.sig=""; body.innerHTML=`<div style="flex:1;overflow-y:auto;padding:30px;"><div id="gRep" style="max-width:980px;margin:0 auto;"></div></div>`; }
+  const convs=await listConvs();
+  const sig=convs.map(c=>c.id+":"+c.lastTs+":"+c.status).join("|")+"|"+Object.keys(USERS).length;
+  if(body.dataset.sig===sig) return; body.dataset.sig=sig;
+  const r=await gatherReport();
+  const hbars=barChart([{label:"Madrugada",value:r.horas[0]},{label:"Manhã",value:r.horas[1]},{label:"Tarde",value:r.horas[2]},{label:"Noite",value:r.horas[3]}],"#6c8fcf");
+  const tbars=r.therItems.length?barChart(r.therItems,"#3f6b52"):`<div style="color:#a39d92;font-size:13.5px;">Nenhum atendimento atribuído ainda.</div>`;
+  const mbars=r.motivos.length?barChart(r.motivos,"#cf8d6c"):`<div style="color:#a39d92;font-size:13.5px;">Sem dados de temas ainda.</div>`;
+  const rep=document.getElementById("gRep"); if(!rep) return;
+  rep.innerHTML=`
+    <h2 style="font-family:'Newsreader',serif;font-weight:500;font-size:26px;margin:0 0 4px;">Relatórios</h2>
+    <p style="color:#8a847a;font-size:14px;margin:0 0 24px;">Indicadores do plantão, atualizados em tempo real.</p>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
+      ${stat("Atendimentos",r.total,"#34593f")}${stat("Na fila",r.fila,"#b5763f")}${stat("Em atendimento",r.ativo,"#2d6a4f")}${stat("Encerrados",r.encer,"#8a847a")}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px;">
+      ${repCard("Tempo médio de espera",fmtDur(r.avgWait),"da entrada na fila até o início do atendimento")}
+      ${repCard("Pacientes únicos",r.pac,"pessoas que buscaram apoio")}
+      ${repCard("Mensagens trocadas",r.totalMsgs,"total na plataforma")}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+      ${chartCard("Atendimentos por terapeuta",tbars)}
+      ${chartCard("Movimento por horário",hbars)}
+    </div>
+    ${chartCard("Temas mais comuns (cadastros)",mbars)}
+    <p style="text-align:center;color:#a39d92;font-size:12px;margin:22px 0 0;">Números calculados a partir dos atendimentos reais registrados na plataforma.</p>`;
+}
+
+/* ---------- Configurações (gestão) ---------- */
+async function gestaoConfig(body){
+  if(body.dataset.mode==="configuracoes") return; // não recria no polling (preserva o que está sendo digitado)
+  body.dataset.mode="configuracoes";
+  const card=(title,desc,inner)=>`<div style="background:#fff;border:1px solid #ece5d8;border-radius:16px;padding:22px 24px;margin-bottom:16px;"><div style="font-weight:700;font-size:15px;margin-bottom:3px;">${title}</div><div style="font-size:13px;color:#8a847a;margin-bottom:14px;line-height:1.45;">${desc}</div>${inner}</div>`;
+  body.innerHTML=`<div style="flex:1;overflow-y:auto;padding:30px;"><div style="max-width:680px;margin:0 auto;">
+    <h2 style="font-family:'Newsreader',serif;font-weight:500;font-size:26px;margin:0 0 4px;">Configurações</h2>
+    <p style="color:#8a847a;font-size:14px;margin:0 0 24px;">Ajustes que mudam o comportamento do app em tempo real.</p>
+    ${card("Nome da plataforma","Aparece no topo de todas as telas.",`<input id="cfgPlat" class="field" value="${esc(SET.plataforma)}">`)}
+    ${card("Acolhimento automático","Mensagem enviada automaticamente quando o paciente abre uma nova conversa e entra na fila.",
+      `<label style="display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;color:#6b655b;margin-bottom:12px;cursor:pointer;"><input id="cfgWelcomeOn" type="checkbox" ${SET.welcomeOn?"checked":""} style="width:18px;height:18px;accent-color:#3f6b52;"> Enviar mensagem de acolhimento</label>
+       <textarea id="cfgWelcomeMsg" class="field" style="min-height:80px;resize:vertical;line-height:1.5;">${esc(SET.welcomeMsg)}</textarea>`)}
+    ${card("Respostas rápidas do terapeuta","Botões de resposta que aparecem no painel do terapeuta. Uma por linha.",
+      `<textarea id="cfgQuick" class="field" style="min-height:110px;resize:vertical;line-height:1.6;">${esc((SET.quickReplies||[]).join("\n"))}</textarea>`)}
+    ${card("Temas do cadastro","Opções que o paciente escolhe ao se cadastrar (“o que te traz aqui”). Uma por linha.",
+      `<textarea id="cfgTemas" class="field" style="min-height:110px;resize:vertical;line-height:1.6;">${esc((SET.temas||[]).join("\n"))}</textarea>`)}
+    <button id="cfgSave" class="primary" style="margin-top:4px;">Salvar configurações</button>
+    <div id="cfgStatus" style="text-align:center;font-size:12.5px;color:#a39d92;min-height:16px;margin-top:10px;"></div>
+  </div></div>`;
+  const lines=id=>(document.getElementById(id).value||"").split("\n").map(s=>s.trim()).filter(Boolean);
+  document.getElementById("cfgSave").onclick=async()=>{
+    await saveSettings({
+      plataforma:(document.getElementById("cfgPlat").value||"").trim()||"Colo",
+      welcomeOn:document.getElementById("cfgWelcomeOn").checked,
+      welcomeMsg:(document.getElementById("cfgWelcomeMsg").value||"").trim(),
+      quickReplies:lines("cfgQuick"),
+      temas:lines("cfgTemas")
+    });
+    toast("Configurações salvas.");
+    render();
+  };
+}
+
+/* ---------- Adicionar profissional (gestão) ---------- */
+function openAddProfessional(){
+  const root=document.getElementById("modalRoot");
+  root.innerHTML=`
+  <div id="modalOverlay" style="position:fixed;inset:0;background:rgba(45,42,38,.45);backdrop-filter:blur(3px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px;animation:fadeUp .2s ease;">
+    <div style="background:#faf7f1;border-radius:20px;width:100%;max-width:440px;max-height:92vh;overflow-y:auto;box-shadow:0 24px 70px rgba(0,0,0,.3);">
+      <div style="padding:22px 26px;border-bottom:1px solid #ece5d8;display:flex;align-items:center;gap:12px;">
+        <span style="font-family:'Newsreader',serif;font-size:22px;font-weight:500;flex:1;">Adicionar profissional</span>
+        <button id="apClose" style="border:none;background:transparent;font-size:22px;color:#8a847a;line-height:1;">×</button>
+      </div>
+      <div style="padding:26px;">
+        ${pf("Nome completo","apNome","")}
+        ${pf("E-mail de acesso","apEmail","","email","nome@colo.com")}
+        <label style="display:block;font-size:13px;font-weight:600;color:#6b655b;margin-bottom:6px;">Papel</label>
+        <select id="apRole" class="field" style="margin-bottom:16px;"><option value="terapeuta">Terapeuta</option><option value="gestao">Gestão</option></select>
+        ${pf("CRP (terapeuta)","apCrp","","text","CRP 00/00000")}
+        ${pf("Senha temporária","apSenha","","text","mín. 4 caracteres")}
+        <div id="apErr" style="color:#b5483a;font-size:13px;font-weight:600;min-height:18px;margin:2px 0 8px;"></div>
+        <button id="apSave" class="primary">Adicionar à equipe</button>
+      </div>
+    </div>
+  </div>`;
+  document.getElementById("apClose").onclick=closeModal;
+  document.getElementById("modalOverlay").onclick=e=>{ if(e.target.id==="modalOverlay") closeModal(); };
+  document.getElementById("apSave").onclick=saveAddProfessional;
+}
+async function saveAddProfessional(){
+  const err=document.getElementById("apErr");
+  if(err){ err.style.color="#6b655b"; err.style.fontWeight="600";
+    err.innerHTML="Por segurança, criar acessos de profissional é feito no painel do Supabase:<br>"+
+      "Authentication → Users → <b>Add user</b> (defina o e-mail e, em <i>User metadata</i>, <code>{\"role\":\"terapeuta\"}</code> ou <code>\"gestao\"</code>).<br>"+
+      "Depois o profissional completa o perfil (foto, CRP) ao entrar. Uma função de convite pela própria tela entra numa próxima fase."; }
+}
+async function _saveAddProfessionalOld(){
+  const v=id=>(document.getElementById(id).value||"").trim();
+  const err=document.getElementById("apErr");
+  const nome=v("apNome"), email=v("apEmail").toLowerCase(), role=v("apRole"), crp=v("apCrp"), senha=v("apSenha");
+  if(!nome||!email||!senha){ err.textContent="Preencha nome, e-mail e senha."; return; }
+  closeModal(); toast("Profissional adicionado à equipe."); refreshGestao(true);
+}
+
+/* ============================================================
+   MENSAGENS (render + diff) e ÁUDIO
+   ============================================================ */
+function sigOf(msgs){ return msgs.length+":"+(msgs.length?msgs[msgs.length-1].id:"0"); }
+async function refreshConvMessages(convId, wrapId, scrollId, cozy, force, readOnly){
+  const wrap=document.getElementById(wrapId); if(!wrap) return;
+  const msgs=await loadMsgs(convId);
+  const mineRole = S.session.role==="terapeuta"?"terapeuta":(S.session.role==="paciente"?"paciente":"__none__");
+  const intro = `<div style="text-align:center;font-size:12px;color:#9a9384;margin-bottom:2px;position:relative;z-index:1;">${msgs.length?(cozy?'Suas conversas são privadas e seguras 🔒':'Atendimento iniciado às '+nowHM(msgs[0].ts)):'Sem mensagens ainda.'}</div>`;
+  const html=intro+msgs.map(m=>bubble(m, m.from===mineRole, cozy)).join("");
+  if(wrap.dataset.sig!==convId+":"+sigOf(msgs)){
+    wrap.dataset.sig=convId+":"+sigOf(msgs);
+    wrap.innerHTML=html; bindAudio(wrap);
+    const sc=document.getElementById(scrollId);
+    if(sc&&(force||sc.scrollHeight-sc.scrollTop-sc.clientHeight<200)) sc.scrollTop=sc.scrollHeight;
+  }
+}
+function bindAudio(scope){
+  scope.querySelectorAll(".audio-msg").forEach(el=>{
+    const btn=el.querySelector(".audio-play");
+    if(btn) btn.onclick=()=>toast("Reprodução de áudio chega na fase do Storage.");
+  });
+}
+async function startRecording(who){
+  toast("Áudio chega na próxima fase (Supabase Storage). Por enquanto, use texto.");
+}
+function stopRecording(keep){ if(!S.recording) return; clearInterval(S.recording.timer); S.recording.cancelled=!keep; try{ S.recording.mr.stop(); }catch(e){ const rb=S.recording.recBar; S.recording=null; recBarShow(rb,false);} }
+function recBarShow(id,show){ const b=document.getElementById(id); if(b) b.style.display=show?"flex":"none"; const t=document.getElementById(id==="tRecBar"?"tRecTime":"pRecTime"); if(t&&show)t.textContent="0:00"; }
+function blobToDataURL(blob){ return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(blob);}); }
+
+/* ---------- toast ---------- */
+function toast(msg){ document.querySelectorAll(".toast").forEach(t=>t.remove()); const el=document.createElement("div"); el.className="toast"; el.textContent=msg; document.body.appendChild(el); clearTimeout(S.toastTimer); S.toastTimer=setTimeout(()=>el.remove(),2600); }
+
+/* ============================================================
+/* ============================================================
+   atualização periódica (rede de segurança; o tempo real é por push)
+   ============================================================ */
+setInterval(async()=>{
+  if(!sb || !PROFILE) return;
+  await loadSettings();
+  if(S.screen==="patient") refreshPatient(false);
+  else if(S.screen==="therapist") refreshTherapist(false);
+  else if(S.screen==="gestao") refreshGestao(false);
+},6000);
+
+/* ============================================================
+   init — sobe o Supabase, restaura sessão e roteia
+   ============================================================ */
+(async function(){
+  if(!initSupabase()){ S.screen="login"; render(); return; }
+  try{ await loadSettings(); }catch(e){}
+  sb.auth.onAuthStateChange((event)=>{
+    if(event==="SIGNED_OUT"){ stopRealtime(); PROFILE=null; S.session=null; S.screen="login"; render(); }
+  });
+  const { data } = await sb.auth.getSession();
+  if(data && data.session){ await afterAuth(); }
+  else { S.screen="login"; render(); }
+})();
+</script>
+</body>
+</html>
