@@ -17,9 +17,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;height:100%;}
+  html,body{margin:0;padding:0;height:100%;overflow-x:hidden;max-width:100%;}
   body{background:#f3efe8;font-family:'Mulish',-apple-system,sans-serif;color:#2d2a26;}
-  #app{min-height:100vh;}
+  #app{min-height:100vh;min-height:100dvh;overflow-x:hidden;}
   ::-webkit-scrollbar{width:9px;height:9px;}
   ::-webkit-scrollbar-thumb{background:rgba(45,42,38,.16);border-radius:8px;border:2px solid transparent;background-clip:padding-box;}
   ::-webkit-scrollbar-track{background:transparent;}
@@ -37,14 +37,24 @@
   .toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#2d2a26;color:#f4efe6;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,.25);animation:fadeUp .3s ease;}
   .seg{flex:1;padding:10px;border:none;border-radius:10px;font-size:14px;font-weight:700;transition:.15s;}
   .convrow:hover{background:#f3efe8 !important;}
+  .m-only{display:none;}
   @media(max-width:820px){
     .login-aside{display:none !important;}
-    .login-panel{width:100% !important;flex:1 !important;padding:32px 22px !important;}
-    .col-list{width:100% !important;flex:1 0 100% !important;}
+    .login-panel{width:100% !important;flex:1 !important;padding:30px 20px !important;}
+    .col-list,.col-main,.col-info{min-width:0 !important;}
+    .col-list{width:100% !important;flex:1 1 100% !important;border-right:none !important;}
     .col-main,.col-info{display:none !important;}
     .col-list.hide{display:none !important;}
-    .col-main.show{display:flex !important;flex:1 0 100% !important;}
-    .col-info.show{display:block !important;width:100% !important;flex:1 0 100% !important;}
+    .col-main.show{display:flex !important;flex:1 1 100% !important;width:100% !important;}
+    .col-info.show{display:block !important;flex:1 1 100% !important;width:100% !important;border-left:none !important;}
+    .m-only{display:inline-flex !important;}
+    .hide-sm{display:none !important;}
+    .topbar{padding:10px 14px !important;gap:10px !important;flex-wrap:wrap !important;}
+    .gnav{order:3;width:100% !important;margin:8px 0 0 0 !important;overflow-x:auto !important;-webkit-overflow-scrolling:touch;justify-content:flex-start !important;}
+    .gnav::-webkit-scrollbar{display:none;}
+    .gnav button{flex:0 0 auto !important;white-space:nowrap;}
+    .gbody{padding:16px !important;}
+    .gscroll{padding:18px 16px !important;}
   }
 </style>
 </head>
@@ -304,6 +314,22 @@ function render(){
   else if(S.screen==="gestao") renderGestao();
 }
 
+/* ---------- navegação mobile (lista → conversa → ficha) ---------- */
+function isMobile(){ return window.matchMedia("(max-width:820px)").matches; }
+function syncMobile(){
+  const root=app(); if(!root) return;
+  const v=S.mView||"list";
+  const list=root.querySelector(".col-list");
+  const main=root.querySelector(".col-main");
+  const info=root.querySelector(".col-info");
+  if(list) list.classList.toggle("hide", v!=="list");
+  if(main) main.classList.toggle("show", v==="chat");
+  if(info) info.classList.toggle("show", v==="info");
+}
+function mNav(v){ S.mView=v; syncMobile(); }
+function backBtn(view){ return `<button class="m-only mback" data-mv="${view}" aria-label="Voltar" style="width:40px;height:40px;border-radius:11px;border:1.5px solid #e2dccf;background:#fff;color:#3f6b52;font-size:20px;line-height:1;align-items:center;justify-content:center;flex:0 0 auto;margin-right:2px;">‹</button>`; }
+function bindMNav(scope){ (scope||document).querySelectorAll(".mback").forEach(b=>b.onclick=()=>mNav(b.dataset.mv)); }
+
 /* ---------- componentes reutilizáveis ---------- */
 function logoMark(size, base, dot, ring){
   return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" style="flex:0 0 auto;display:block;overflow:visible;" aria-hidden="true">
@@ -370,7 +396,7 @@ const AUDIOBARS = [7,12,18,9,22,14,25,17,10,21,13,8,19,24,11,16,9,20,13,23,15,8,
 function renderLogin(){
   const segP = S.loginRole==="paciente";
   app().innerHTML = `
-  <div style="min-height:100vh;display:flex;">
+  <div style="min-height:100vh;min-height:100dvh;display:flex;">
     <div class="login-aside" style="flex:1.1;background:linear-gradient(155deg,#3f6b52 0%,#34593f 100%);color:#f4efe6;padding:60px 64px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden;min-width:0;">
       <div style="position:absolute;width:440px;height:440px;border-radius:50%;background:rgba(255,255,255,.05);right:-160px;top:-140px;"></div>
       <div style="position:absolute;width:300px;height:300px;border-radius:50%;background:rgba(255,255,255,.04);left:-120px;bottom:-110px;"></div>
@@ -437,9 +463,10 @@ async function afterAuth(){
   S.session={ email:PROFILE.email, role:PROFILE.role, id:PROFILE.id, name:PROFILE.name, photo:PROFILE.photo||null, crp:PROFILE.crp, cargo:PROFILE.cargo };
   await loadUsers();
   await loadSettings();
-  if(PROFILE.role==="terapeuta"){ S.screen="therapist"; S.tTab="aguardando"; S.tActive=null; }
+  S.mView="list";
+  if(PROFILE.role==="terapeuta"){ S.screen="therapist"; S.tTab="meus"; S.tActive=null; }
   else if(PROFILE.role==="gestao"){ S.screen="gestao"; S.gView="relatorios"; S.gActive=null; }
-  else { S.screen="patient"; const mine=(await listConvs()).filter(c=>c.patientId===PROFILE.id); S.pActive = mine[0]?mine[0].id:null; }
+  else { S.screen="patient"; const mine=(await listConvs()).filter(c=>c.patientId===PROFILE.id); S.pActive = mine[0]?mine[0].id:null; if(isMobile() && S.pActive) S.mView="chat"; }
   startRealtime();
   startPresence();
   render();
@@ -452,7 +479,7 @@ async function logout(){ try{ await sb.auth.signOut(); }catch(e){} stopRealtime(
 function renderSignup(){
   const st=S.su.step;
   app().innerHTML = `
-  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:48px 24px 60px;background:radial-gradient(120% 100% at 50% 0%,#f4efe6 0%,#ece5d8 100%);">
+  <div style="min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:48px 24px 60px;background:radial-gradient(120% 100% at 50% 0%,#f4efe6 0%,#ece5d8 100%);">
     <div style="width:100%;max-width:480px;animation:fadeUp .45s ease;">
       <div style="display:flex;align-items:center;gap:11px;margin-bottom:30px;justify-content:center;">${logoMark(30,"#3f6b52","#7fae90","#ece5d8")}<span style="font-family:'Newsreader',serif;font-size:21px;font-weight:600;color:#34593f;">${esc(SET.plataforma||"Colo")}</span></div>
       <div style="display:flex;gap:8px;margin-bottom:30px;">${[1,2].map(n=>`<div style="flex:1;height:5px;border-radius:3px;background:${st>=n?'#3f6b52':'#ddd5c7'};"></div>`).join("")}</div>
@@ -606,12 +633,12 @@ async function saveProfile(role){
 function renderPatient(){
   const u=me();
   app().innerHTML = `
-  <div style="height:100vh;display:flex;flex-direction:column;background:#f3efe8;">
-    <div style="display:flex;align-items:center;gap:14px;padding:13px 22px;background:#fff;border-bottom:1px solid #ece5d8;flex:0 0 auto;z-index:3;">
+  <div style="height:100vh;height:100dvh;display:flex;flex-direction:column;background:#f3efe8;">
+    <div class="topbar" style="display:flex;align-items:center;gap:14px;padding:13px 22px;background:#fff;border-bottom:1px solid #ece5d8;flex:0 0 auto;z-index:3;">
       <div style="display:flex;align-items:center;gap:10px;">${logoMark(28,"#3f6b52","#7fae90","#fff")}<span style="font-family:'Newsreader',serif;font-size:19px;font-weight:600;color:#34593f;">${esc(SET.plataforma||"Colo")}</span></div>
       <div style="flex:1;"></div>
       <button id="pProfile" title="Meu perfil" style="display:flex;align-items:center;gap:10px;border:none;background:transparent;padding:4px 6px;border-radius:12px;">
-        <div style="text-align:right;line-height:1.2;"><div style="font-weight:700;font-size:14px;">${esc(u.name)}</div><div style="font-size:12px;color:#8a847a;">Meu perfil</div></div>
+        <div class="hide-sm" style="text-align:right;line-height:1.2;"><div style="font-weight:700;font-size:14px;">${esc(u.name)}</div><div style="font-size:12px;color:#8a847a;">Meu perfil</div></div>
         ${avatar(u,38)}
       </button>
       <button id="pLogout" title="Sair" style="width:38px;height:38px;border-radius:10px;border:1.5px solid #e2dccf;background:#fff;color:#8a847a;font-size:15px;">⎋</button>
@@ -624,7 +651,7 @@ function renderPatient(){
         </div>
         <div id="pList" style="flex:1;overflow-y:auto;min-height:0;padding:0 8px 8px;"></div>
       </div>
-      <div class="col-main show" id="pMain" style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;background:#e8f0ea;"></div>
+      <div class="col-main" id="pMain" style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;background:#e8f0ea;"></div>
     </div>
   </div>`;
   app().querySelector("#pProfile").onclick=openProfile;
@@ -633,7 +660,7 @@ function renderPatient(){
   refreshPatient(true);
 }
 async function patientNewConv(){
-  const id=await createConv(S.session.id); S.pActive=id; await markRead(id,"P"); refreshPatient(true);
+  const id=await createConv(S.session.id); S.pActive=id; S.mView="chat"; await markRead(id,"P"); refreshPatient(true);
 }
 async function refreshPatient(force){
   await loadUsers();
@@ -646,9 +673,10 @@ async function refreshPatient(force){
     list.dataset.sig=sig;
     list.innerHTML = mine.length? mine.map(c=>patientConvRow(c)).join("")
       : `<div style="padding:30px 18px;text-align:center;color:#a39d92;font-size:13.5px;line-height:1.6;">Você ainda não tem conversas.<br>Toque em <b style="color:#3f6b52;">Nova conversa</b> para falar com o plantão.</div>`;
-    list.querySelectorAll("[data-cid]").forEach(el=>el.onclick=async()=>{ S.pActive=el.dataset.cid; await markRead(el.dataset.cid,"P"); refreshPatient(true); });
+    list.querySelectorAll("[data-cid]").forEach(el=>el.onclick=async()=>{ S.pActive=el.dataset.cid; S.mView="chat"; await markRead(el.dataset.cid,"P"); refreshPatient(true); });
   }
   await renderPatientMain(force, mine);
+  syncMobile();
 }
 function patientConvRow(c){
   const ther=userById(c.therapistId);
@@ -695,11 +723,12 @@ async function renderPatientMain(force, mine){
   if(main.dataset.mode!=="chat:"+conv.id+":"+conv.status+":"+(conv.therapistId||"")){
     main.dataset.mode="chat:"+conv.id+":"+conv.status+":"+(conv.therapistId||"");
     main.innerHTML=`
-      <div style="display:flex;align-items:center;gap:13px;padding:12px 22px;background:#fff;border-bottom:1px solid #ece5d8;flex:0 0 auto;z-index:2;">
+      <div style="display:flex;align-items:center;gap:11px;padding:12px 18px;background:#fff;border-bottom:1px solid #ece5d8;flex:0 0 auto;z-index:2;">
+        ${backBtn('list')}
         ${ther? avatar(ther,44) : `<div style="width:44px;height:44px;border-radius:50%;background:#efe9df;color:#b5763f;display:flex;align-items:center;justify-content:center;font-size:19px;">⏳</div>`}
         <div style="flex:1;min-width:0;">
-          <div style="font-weight:700;font-size:16px;">${ther?esc(ther.name):"Aguardando atendimento"}</div>
-          <div style="font-size:12.5px;color:#8a847a;margin-top:1px;">${ther?esc(ther.crp||"Terapeuta de plantão"):"Você está na fila — já já alguém te atende"}</div>
+          <div style="font-weight:700;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${ther?esc(ther.name):"Aguardando atendimento"}</div>
+          <div style="font-size:12.5px;color:#8a847a;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${ther?esc(ther.crp||"Terapeuta de plantão"):"Você está na fila — já já alguém te atende"}</div>
         </div>
       </div>
       <div id="pScroll" style="flex:1;overflow-y:auto;min-height:0;position:relative;background:#e8f0ea;">
@@ -729,6 +758,7 @@ async function renderPatientMain(force, mine){
       main.querySelector("#pRecStop").onclick=()=>stopRecording(true);
       main.querySelector("#pRecCancel").onclick=()=>stopRecording(false);
     } else { const f=main.querySelector("#pFromClosed"); if(f) f.onclick=patientNewConv; }
+    bindMNav(main);
   }
   await refreshConvMessages(S.pActive, "pMsgs", "pScroll", true, force);
 }
@@ -746,13 +776,13 @@ async function sendPatient(){
 function renderTherapist(){
   const u=me();
   app().innerHTML = `
-  <div style="height:100vh;display:flex;flex-direction:column;background:#f3efe8;">
-    <div style="display:flex;align-items:center;gap:16px;padding:12px 22px;background:#fff;border-bottom:1px solid #ece5d8;flex:0 0 auto;z-index:3;">
+  <div style="height:100vh;height:100dvh;display:flex;flex-direction:column;background:#f3efe8;">
+    <div class="topbar" style="display:flex;align-items:center;gap:16px;padding:12px 22px;background:#fff;border-bottom:1px solid #ece5d8;flex:0 0 auto;z-index:3;">
       <div style="display:flex;align-items:center;gap:10px;">${logoMark(28,"#3f6b52","#7fae90","#fff")}<span style="font-family:'Newsreader',serif;font-size:19px;font-weight:600;color:#34593f;">${esc(SET.plataforma||"Colo")}</span></div>
-      <div style="display:flex;align-items:center;gap:8px;background:#f1f7f3;border:1px solid #d8e6dd;padding:6px 13px;border-radius:20px;font-size:13px;color:#2d6a4f;font-weight:600;"><span style="width:8px;height:8px;border-radius:50%;background:#3fb56a;animation:blink 1.8s infinite;"></span>Plantão 24h ativo</div>
+      <div class="hide-sm" style="display:flex;align-items:center;gap:8px;background:#f1f7f3;border:1px solid #d8e6dd;padding:6px 13px;border-radius:20px;font-size:13px;color:#2d6a4f;font-weight:600;"><span style="width:8px;height:8px;border-radius:50%;background:#3fb56a;animation:blink 1.8s infinite;"></span>Plantão 24h ativo</div>
       <div style="flex:1;"></div>
       <button id="tProfile" title="Meu perfil" style="display:flex;align-items:center;gap:10px;border:none;background:transparent;padding:4px 6px;border-radius:12px;">
-        <div style="text-align:right;line-height:1.2;"><div style="font-weight:700;font-size:14px;">${esc(u.name)}</div><div style="font-size:12px;color:#8a847a;">${esc(u.crp||"Meu perfil")}</div></div>
+        <div class="hide-sm" style="text-align:right;line-height:1.2;"><div style="font-weight:700;font-size:14px;">${esc(u.name)}</div><div style="font-size:12px;color:#8a847a;">${esc(u.crp||"Meu perfil")}</div></div>
         ${avatar(u,40)}
       </button>
       <button id="tLogout" title="Sair" style="width:38px;height:38px;border-radius:10px;border:1.5px solid #e2dccf;background:#fff;color:#8a847a;font-size:15px;">⎋</button>
@@ -762,20 +792,20 @@ function renderTherapist(){
         <div style="padding:16px 16px 10px;flex:0 0 auto;">
           <div style="display:flex;align-items:center;gap:9px;background:#f3efe8;border-radius:11px;padding:10px 13px;margin-bottom:13px;"><span style="color:#a39d92;font-size:15px;">⌕</span><input id="tSearch" placeholder="Buscar paciente" style="border:none;background:transparent;font-size:14px;flex:1;"></div>
           <div style="display:flex;gap:7px;">
-            <button class="ttab" data-t="aguardando" style="${tabPill(S.tTab==='aguardando')}">Aguardando <span id="tWaitN">·0</span></button>
             <button class="ttab" data-t="meus" style="${tabPill(S.tTab==='meus')}">Meus <span id="tMineN">·0</span></button>
+            <button class="ttab" data-t="aguardando" style="${tabPill(S.tTab==='aguardando')}">Aguardando <span id="tWaitN">·0</span></button>
           </div>
         </div>
         <div id="tList" style="flex:1;overflow-y:auto;min-height:0;padding:0 8px 8px;"></div>
       </div>
-      <div class="col-main show" id="tMain" style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;background:#e8f0ea;"></div>
+      <div class="col-main" id="tMain" style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;background:#e8f0ea;"></div>
       <div class="col-info" id="tInfo" style="width:288px;flex:0 0 288px;background:#fff;border-left:1px solid #ece5d8;padding:24px 22px;overflow-y:auto;min-height:0;"></div>
     </div>
   </div>`;
   app().querySelector("#tProfile").onclick=openProfile;
   app().querySelector("#tLogout").onclick=logout;
   app().querySelector("#tSearch").oninput=()=>refreshTherapist(false);
-  app().querySelectorAll(".ttab").forEach(b=>b.onclick=()=>{S.tTab=b.dataset.t;S.tActive=null;render();});
+  app().querySelectorAll(".ttab").forEach(b=>b.onclick=()=>{S.tTab=b.dataset.t;S.tActive=null;S.mView="list";render();});
   refreshTherapist(true);
 }
 function tabPill(a){ return `flex:1;padding:8px 6px;border:none;border-radius:10px;font-size:13px;font-weight:700;background:${a?'#3f6b52':'#f3efe8'};color:${a?'#fff':'#8a847a'};`; }
@@ -794,10 +824,11 @@ async function refreshTherapist(force){
     list.dataset.sig=sig;
     list.innerHTML=rows.length? rows.map(c=>therapistConvRow(c,on)).join("")
       : `<div style="padding:30px 18px;text-align:center;color:#a39d92;font-size:13.5px;line-height:1.6;">${S.tTab==='aguardando'?'Ninguém na fila agora 🌿':'Você ainda não puxou nenhum atendimento.'}</div>`;
-    list.querySelectorAll("[data-cid]").forEach(el=>el.onclick=async()=>{ S.tActive=el.dataset.cid; if(S.tTab==="meus") await markRead(el.dataset.cid,"T"); refreshTherapist(true); });
+    list.querySelectorAll("[data-cid]").forEach(el=>el.onclick=async()=>{ S.tActive=el.dataset.cid; S.mView="chat"; if(S.tTab==="meus") await markRead(el.dataset.cid,"T"); refreshTherapist(true); });
   }
   if(!S.tActive && rows[0]) S.tActive=rows[0].id;
   await renderTherapistMain(force,on);
+  syncMobile();
 }
 function therapistConvRow(c,on){
   const p=userById(c.patientId); const active=c.id===S.tActive;
@@ -847,16 +878,18 @@ async function renderTherapistMain(force,on){
             </div>
           </div>`);
     main.innerHTML=`
-      <div style="display:flex;align-items:center;gap:13px;padding:12px 22px;background:#fff;border-bottom:1px solid #ece5d8;flex:0 0 auto;z-index:2;">
+      <div style="display:flex;align-items:center;gap:11px;padding:12px 18px;background:#fff;border-bottom:1px solid #ece5d8;flex:0 0 auto;z-index:2;">
+        ${backBtn('list')}
         ${avatar(p,44)}
         <div style="flex:1;min-width:0;">
-          <div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:700;font-size:15.5px;">${p?esc(p.name):"Paciente"}</span>${p&&p.idade?`<span style="font-size:12.5px;color:#8a847a;">${p.idade} anos</span>`:''}</div>
+          <div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:700;font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p?esc(p.name):"Paciente"}</span>${p&&p.idade?`<span class="hide-sm" style="font-size:12.5px;color:#8a847a;">${p.idade} anos</span>`:''}</div>
           <div style="font-size:12.5px;color:#8a847a;margin-top:1px;">${isWaiting?'na fila de espera':(c.status==='encerrado'?'encerrado':'em atendimento com você')}</div>
         </div>
+        <button class="m-only minfo" aria-label="Ficha do paciente" style="width:40px;height:40px;border-radius:11px;border:1.5px solid #e2dccf;background:#fff;color:#6b655b;font-size:17px;align-items:center;justify-content:center;flex:0 0 auto;">☰</button>
       </div>
       <div id="tScroll" style="flex:1;overflow-y:auto;min-height:0;position:relative;background:#e8f0ea;">${greenPattern(c.id)}<div id="tMsgs" style="position:relative;z-index:1;max-width:1400px;margin:0 auto;display:flex;flex-direction:column;gap:8px;padding:22px clamp(16px,4vw,48px);"></div></div>
       ${composer}`;
-    if(isWaiting){ main.querySelector("#tClaim").onclick=async()=>{ if(await claimConv(c.id)){ S.tTab="meus"; S.tActive=c.id; toast("Atendimento iniciado. Agora é só seu."); refreshTherapist(true);} }; }
+    if(isWaiting){ main.querySelector("#tClaim").onclick=async()=>{ if(await claimConv(c.id)){ S.tTab="meus"; S.tActive=c.id; S.mView="chat"; toast("Atendimento iniciado. Agora é só seu."); refreshTherapist(true);} }; }
     else if(c.status==="encerrado"){ main.querySelector("#tReopen").onclick=async()=>{ await reopenConv(c.id); refreshTherapist(true); }; }
     else {
       main.querySelector("#tSend").onclick=sendTherapist;
@@ -866,6 +899,7 @@ async function renderTherapistMain(force,on){
       main.querySelector("#tRecStop").onclick=()=>stopRecording(true);
       main.querySelector("#tRecCancel").onclick=()=>stopRecording(false);
     }
+    bindMNav(main); const ib=main.querySelector(".minfo"); if(ib) ib.onclick=()=>mNav('info');
   }
   await refreshConvMessages(c.id,"tMsgs","tScroll",false,force);
   await renderTherapistInfo(p,c,on,isMine);
@@ -878,6 +912,7 @@ async function renderTherapistInfo(p,c,on,isMine){
   if(info.dataset.sig===sig) return;
   info.dataset.sig=sig;
   info.innerHTML=`
+    <button class="m-only mback" data-mv="chat" aria-label="Voltar à conversa" style="margin-bottom:14px;padding:9px 14px;border-radius:11px;border:1.5px solid #e2dccf;background:#fff;color:#3f6b52;font-size:14px;font-weight:700;align-items:center;gap:6px;">‹ Voltar à conversa</button>
     <div style="display:flex;flex-direction:column;align-items:center;text-align:center;">
       ${avatar(p,72)}
       <div style="font-family:'Newsreader',serif;font-size:21px;font-weight:500;margin-top:12px;">${esc(p.name)}</div>
@@ -891,6 +926,7 @@ async function renderTherapistInfo(p,c,on,isMine){
     <textarea id="tNotes" ${isMine?'':'disabled'} placeholder="${isMine?'Registre observações…':'Somente o terapeuta responsável edita.'}" style="width:100%;min-height:96px;resize:vertical;padding:12px;border:1.5px solid #e2dccf;border-radius:11px;font-size:13.5px;line-height:1.5;background:${isMine?'#faf7f1':'#f3efe8'};margin-bottom:6px;">${esc(notes)}</textarea>
     <div id="tNotesStatus" style="font-size:11.5px;color:#a39d92;min-height:14px;margin-bottom:14px;"></div>
     ${isMine&&c.status!=="encerrado"?`<button id="tClose" style="width:100%;padding:12px;border:none;border-radius:11px;background:#f7ece9;color:#b5483a;font-size:13.5px;font-weight:700;">Encerrar atendimento</button>`:''}`;
+  bindMNav(info);
   if(isMine){
     let tmr; const nt=info.querySelector("#tNotes");
     nt.oninput=e=>{ clearTimeout(tmr); const st=info.querySelector("#tNotesStatus"); if(st)st.textContent="salvando…"; tmr=setTimeout(async()=>{ await setNotes(c.id,e.target.value); const s2=document.getElementById("tNotesStatus"); if(s2)s2.textContent="✓ salvo"; },600); };
@@ -912,10 +948,10 @@ async function quickReply(t){ if(!S.tActive) return; await pushMsg(S.tActive,{id
 function renderGestao(){
   const u=me();
   app().innerHTML = `
-  <div style="height:100vh;display:flex;flex-direction:column;background:#f3efe8;">
-    <div style="display:flex;align-items:center;gap:16px;padding:12px 22px;background:#fff;border-bottom:1px solid #ece5d8;flex:0 0 auto;z-index:3;">
-      <div style="display:flex;align-items:center;gap:10px;">${logoMark(28,"#3f6b52","#7fae90","#fff")}<span style="font-family:'Newsreader',serif;font-size:19px;font-weight:600;color:#34593f;">${esc(SET.plataforma||"Colo")}</span><span style="font-size:12px;font-weight:700;color:#b5763f;background:#fbf0e2;padding:4px 10px;border-radius:12px;margin-left:4px;">Gestão</span></div>
-      <div style="display:flex;gap:6px;background:#efe9df;padding:4px;border-radius:11px;margin-left:6px;">
+  <div style="height:100vh;height:100dvh;display:flex;flex-direction:column;background:#f3efe8;">
+    <div class="topbar" style="display:flex;align-items:center;gap:16px;padding:12px 22px;background:#fff;border-bottom:1px solid #ece5d8;flex:0 0 auto;z-index:3;">
+      <div style="display:flex;align-items:center;gap:10px;">${logoMark(28,"#3f6b52","#7fae90","#fff")}<span style="font-family:'Newsreader',serif;font-size:19px;font-weight:600;color:#34593f;">${esc(SET.plataforma||"Colo")}</span><span class="hide-sm" style="font-size:12px;font-weight:700;color:#b5763f;background:#fbf0e2;padding:4px 10px;border-radius:12px;margin-left:4px;">Gestão</span></div>
+      <div class="gnav" style="display:flex;gap:6px;background:#efe9df;padding:4px;border-radius:11px;margin-left:6px;">
         <button class="gtab" data-v="relatorios" style="${tabPill2(S.gView==='relatorios')}">Relatórios</button>
         <button class="gtab" data-v="conversas" style="${tabPill2(S.gView==='conversas')}">Conversas</button>
         <button class="gtab" data-v="equipe" style="${tabPill2(S.gView==='equipe')}">Equipe</button>
@@ -923,7 +959,7 @@ function renderGestao(){
       </div>
       <div style="flex:1;"></div>
       <button id="gProfile" title="Meu perfil" style="display:flex;align-items:center;gap:10px;border:none;background:transparent;padding:4px 6px;border-radius:12px;">
-        <div style="text-align:right;line-height:1.2;"><div style="font-weight:700;font-size:14px;">${esc(u.name)}</div><div style="font-size:12px;color:#8a847a;">${esc(u.cargo||"Gestão")}</div></div>
+        <div class="hide-sm" style="text-align:right;line-height:1.2;"><div style="font-weight:700;font-size:14px;">${esc(u.name)}</div><div style="font-size:12px;color:#8a847a;">${esc(u.cargo||"Gestão")}</div></div>
         ${avatar(u,40)}
       </button>
       <button id="gLogout" title="Sair" style="width:38px;height:38px;border-radius:10px;border:1.5px solid #e2dccf;background:#fff;color:#8a847a;font-size:15px;">⎋</button>
@@ -932,7 +968,7 @@ function renderGestao(){
   </div>`;
   app().querySelector("#gProfile").onclick=openProfile;
   app().querySelector("#gLogout").onclick=logout;
-  app().querySelectorAll(".gtab").forEach(b=>b.onclick=()=>{S.gView=b.dataset.v;S.gActive=null;render();});
+  app().querySelectorAll(".gtab").forEach(b=>b.onclick=()=>{S.gView=b.dataset.v;S.gActive=null;S.mView="list";render();});
   refreshGestao(true);
 }
 function tabPill2(a){ return `padding:8px 16px;border:none;border-radius:9px;font-size:13.5px;font-weight:700;background:${a?'#fff':'transparent'};color:${a?'#2d6a4f':'#8a847a'};box-shadow:${a?'0 1px 3px rgba(45,42,38,.1)':'none'};`; }
@@ -954,8 +990,8 @@ async function refreshGestao(force){
         </div>
         <div id="gList" style="flex:1;overflow-y:auto;min-height:0;padding:0 8px 8px;"></div>
       </div>
-      <div class="col-main show" id="gMain" style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;background:#e8f0ea;"></div>`;
-    body.querySelectorAll(".gfil").forEach(b=>b.onclick=()=>{S.gFilter=b.dataset.f;S.gActive=null;refreshGestao(true);});
+      <div class="col-main" id="gMain" style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;background:#e8f0ea;"></div>`;
+    body.querySelectorAll(".gfil").forEach(b=>b.onclick=()=>{S.gFilter=b.dataset.f;S.gActive=null;S.mView="list";refreshGestao(true);});
   }
   const all=(await listConvs()).sort((a,b)=>b.lastTs-a.lastTs);
   const filtered=all.filter(c=>S.gFilter==="todas"||c.status===S.gFilter).filter(c=>(c.pcount||c.count)>0||c.status!=="aguardando");
@@ -964,10 +1000,11 @@ async function refreshGestao(force){
   if(list.dataset.sig!==sig){
     list.dataset.sig=sig;
     list.innerHTML=filtered.length?filtered.map(c=>gestaoConvRow(c)).join(""):`<div style="padding:30px 18px;text-align:center;color:#a39d92;font-size:13.5px;">Nenhuma conversa nesse filtro.</div>`;
-    list.querySelectorAll("[data-cid]").forEach(el=>el.onclick=()=>{S.gActive=el.dataset.cid;refreshGestao(true);});
+    list.querySelectorAll("[data-cid]").forEach(el=>el.onclick=()=>{S.gActive=el.dataset.cid;S.mView="chat";refreshGestao(true);});
   }
   if(!S.gActive&&filtered[0]) S.gActive=filtered[0].id;
   await gestaoMain(force);
+  syncMobile();
 }
 function chipFil(a){ return `padding:7px 12px;border:1.5px solid ${a?'#3f6b52':'#e2dccf'};border-radius:14px;font-size:12.5px;font-weight:700;background:${a?'#eaf3ee':'#fff'};color:${a?'#2d6a4f':'#8a847a'};`; }
 function statusTag(s){ const m={aguardando:["#b5763f","#fbf0e2","na fila"],ativo:["#2d6a4f","#f1f7f3","em atendimento"],encerrado:["#8a847a","#f3efe8","encerrado"]}[s]; return `<span style="font-size:11px;font-weight:700;color:${m[0]};background:${m[1]};padding:2px 8px;border-radius:8px;">${m[2]}</span>`; }
@@ -990,12 +1027,14 @@ async function gestaoMain(force){
   if(main.dataset.mode!==mode){
     main.dataset.mode=mode;
     main.innerHTML=`
-      <div style="display:flex;align-items:center;gap:13px;padding:12px 22px;background:#fff;border-bottom:1px solid #ece5d8;flex:0 0 auto;z-index:2;">
+      <div style="display:flex;align-items:center;gap:11px;padding:12px 18px;background:#fff;border-bottom:1px solid #ece5d8;flex:0 0 auto;z-index:2;">
+        ${backBtn('list')}
         ${avatar(p,44)}
-        <div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:15.5px;">${p?esc(p.name):"Paciente"}</div><div style="font-size:12.5px;color:#8a847a;margin-top:1px;">${statusTagText(c.status)}${t?' · '+esc(t.name):''}</div></div>
+        <div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p?esc(p.name):"Paciente"}</div><div style="font-size:12.5px;color:#8a847a;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${statusTagText(c.status)}${t?' · '+esc(t.name):''}</div></div>
       </div>
       <div id="gScroll" style="flex:1;overflow-y:auto;min-height:0;position:relative;background:#e8f0ea;">${greenPattern(c.id+"g")}<div id="gMsgs" style="position:relative;z-index:1;max-width:1400px;margin:0 auto;display:flex;flex-direction:column;gap:8px;padding:22px clamp(16px,4vw,48px);"></div></div>
       <div style="flex:0 0 auto;padding:14px 22px;background:#fff;border-top:1px solid #ece5d8;text-align:center;font-size:13px;color:#8a847a;">👁 Visualização da gestão · somente leitura</div>`;
+    bindMNav(main);
   }
   await refreshConvMessages(c.id,"gMsgs","gScroll",false,force,true);
 }
@@ -1003,7 +1042,7 @@ function statusTagText(s){ return {aguardando:"na fila de espera",ativo:"em aten
 async function gestaoEquipe(body,on){
   if(body.dataset.mode!=="equipe"){
     body.dataset.mode="equipe";
-    body.innerHTML=`<div style="flex:1;overflow-y:auto;padding:30px;"><div id="gTeam" style="max-width:920px;margin:0 auto;"></div></div>`;
+    body.innerHTML=`<div class="gscroll" style="flex:1;overflow-y:auto;padding:30px;"><div id="gTeam" style="max-width:920px;margin:0 auto;"></div></div>`;
   }
   const all=await listConvs();
   const team=Object.values(USERS).filter(u=>u.role==="terapeuta"||u.role==="gestao");
@@ -1031,11 +1070,11 @@ async function gestaoEquipe(body,on){
       </div>
       <button id="gAddPro" class="primary" style="width:auto;padding:11px 18px;font-size:14px;white-space:nowrap;">＋ Adicionar profissional</button>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:28px;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:28px;">
       ${stat("Na fila",waiting,"#b5763f")}${stat("Em atendimento",ativos,"#2d6a4f")}${stat("Encerrados",encer,"#8a847a")}
     </div>
     <div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#a39d92;font-weight:700;margin-bottom:12px;">Terapeutas</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">${cardsTher}</div>`;
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:14px;">${cardsTher}</div>`;
   const addBtn=document.getElementById("gAddPro"); if(addBtn) addBtn.onclick=openAddProfessional;
 }
 function stat(label,n,color){ return `<div style="background:#fff;border:1px solid #ece5d8;border-radius:16px;padding:18px 20px;"><div style="font-family:'Newsreader',serif;font-size:34px;font-weight:500;color:${color};line-height:1;">${n}</div><div style="font-size:13px;color:#8a847a;margin-top:6px;">${label}</div></div>`; }
@@ -1071,7 +1110,7 @@ async function gatherReport(){
   return {fila,ativo,encer,total:real.length,pac,totalMsgs,avgWait,therItems,horas,motivos};
 }
 async function gestaoRelatorios(body,on){
-  if(body.dataset.mode!=="relatorios"){ body.dataset.mode="relatorios"; body.dataset.sig=""; body.innerHTML=`<div style="flex:1;overflow-y:auto;padding:30px;"><div id="gRep" style="max-width:980px;margin:0 auto;"></div></div>`; }
+  if(body.dataset.mode!=="relatorios"){ body.dataset.mode="relatorios"; body.dataset.sig=""; body.innerHTML=`<div class="gscroll" style="flex:1;overflow-y:auto;padding:30px;"><div id="gRep" style="max-width:980px;margin:0 auto;"></div></div>`; }
   const convs=await listConvs();
   const sig=convs.map(c=>c.id+":"+c.lastTs+":"+c.status).join("|")+"|"+Object.keys(USERS).length;
   if(body.dataset.sig===sig) return; body.dataset.sig=sig;
@@ -1083,10 +1122,10 @@ async function gestaoRelatorios(body,on){
   rep.innerHTML=`
     <h2 style="font-family:'Newsreader',serif;font-weight:500;font-size:26px;margin:0 0 4px;">Relatórios</h2>
     <p style="color:#8a847a;font-size:14px;margin:0 0 24px;">Indicadores do plantão, atualizados em tempo real.</p>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:14px;">
       ${stat("Atendimentos",r.total,"#34593f")}${stat("Na fila",r.fila,"#b5763f")}${stat("Em atendimento",r.ativo,"#2d6a4f")}${stat("Encerrados",r.encer,"#8a847a")}
     </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:24px;">
       ${repCard("Tempo médio de espera",fmtDur(r.avgWait),"da entrada na fila até o início do atendimento")}
       ${repCard("Pacientes únicos",r.pac,"pessoas que buscaram apoio")}
       ${repCard("Mensagens trocadas",r.totalMsgs,"total na plataforma")}
@@ -1104,7 +1143,7 @@ async function gestaoConfig(body){
   if(body.dataset.mode==="configuracoes") return; // não recria no polling (preserva o que está sendo digitado)
   body.dataset.mode="configuracoes";
   const card=(title,desc,inner)=>`<div style="background:#fff;border:1px solid #ece5d8;border-radius:16px;padding:22px 24px;margin-bottom:16px;"><div style="font-weight:700;font-size:15px;margin-bottom:3px;">${title}</div><div style="font-size:13px;color:#8a847a;margin-bottom:14px;line-height:1.45;">${desc}</div>${inner}</div>`;
-  body.innerHTML=`<div style="flex:1;overflow-y:auto;padding:30px;"><div style="max-width:680px;margin:0 auto;">
+  body.innerHTML=`<div class="gscroll" style="flex:1;overflow-y:auto;padding:30px;"><div style="max-width:680px;margin:0 auto;">
     <h2 style="font-family:'Newsreader',serif;font-weight:500;font-size:26px;margin:0 0 4px;">Configurações</h2>
     <p style="color:#8a847a;font-size:14px;margin:0 0 24px;">Ajustes que mudam o comportamento do app em tempo real.</p>
     ${card("Nome da plataforma","Aparece no topo de todas as telas.",`<input id="cfgPlat" class="field" value="${esc(SET.plataforma)}">`)}
@@ -1217,6 +1256,8 @@ setInterval(async()=>{
   else if(S.screen==="therapist") refreshTherapist(false);
   else if(S.screen==="gestao") refreshGestao(false);
 },6000);
+
+window.addEventListener("resize", ()=>{ syncMobile(); });
 
 /* ============================================================
    init — sobe o Supabase, restaura sessão e roteia
